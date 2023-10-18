@@ -1,0 +1,3 @@
+# generated ebpf objects
+bpf_bpf*.go
+bpf_bpf*.o
