@@ -20,6 +20,22 @@
 
 char _license[] SEC("license") = "GPL";
 
+/* Theory of operation:
+1. (Packet arrives at interface)
+2. XDP (ingress) starts
+  * Lookup interface direction
+  * Dissect the packet to find L3 offset (resolving any NATs)
+  * Perform LPM lookup to determine CPU destination
+  * Track traffic totals
+  * Perform CPU redirection
+3. TC (egress) starts
+  * Lookup interface direction
+  * Lookup CPU/TX queue mapping
+  * Dissect the packet to find L3 offset (resolving any NATs)
+  * LPM lookup to find TC handle
+  * Update packet to set appropriate TC handle.
+*/
+
 // XDP-Ingress Entry Point
 SEC("xdp")
 int xdp_prog(struct xdp_md *ctx) {
