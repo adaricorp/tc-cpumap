@@ -518,7 +518,7 @@ func disableXps() (map[string]map[string][]byte, error) {
 			if err := os.WriteFile(
 				path.Join("/sys/class/net", ifaceName, "queues", queue, "xps_cpus"),
 				newMask,
-				644,
+				0644,
 			); err != nil {
 				return oldXpsMasks, errors.Wrapf(
 					err,
@@ -539,7 +539,7 @@ func restoreXps(oldXpsMasks map[string]map[string][]byte) {
 			if err := os.WriteFile(
 				path.Join("/sys/class/net", ifaceName, "queues", queue, "xps_cpus"),
 				mask,
-				644,
+				0644,
 			); err != nil {
 				slog.Error(
 					"Couldn't restore original XPS mask",
