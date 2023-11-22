@@ -296,9 +296,11 @@ func loadBpf() (bpf.BpfObjects, error) {
 
 		// Rewrite BPF program to enable per-packet debug logging to
 		// /sys/kernel/debug/tracing/trace_pipe
-		bpfSpec.RewriteConstants(map[string]interface{}{
+		if err := bpfSpec.RewriteConstants(map[string]interface{}{
 			"DEBUG": bool(true),
-		})
+		}); err != nil {
+			slog.Error("Couldn't rewrite debug constant", "error", err.Error())
+		}
 	}
 
 	bpfMapOpts := ebpf.MapOptions{
