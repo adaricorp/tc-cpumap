@@ -39,11 +39,10 @@ func printVersion() {
 }
 
 func init() {
-	fs := ff.NewFlagSet("tc_cpumap_traffic_stats")
+	fs := ff.NewFlagSet("tc_cpumap_trafficstats")
 	version := fs.BoolLong("version", "Print version")
-	perCpuStats = fs.BoolLongDefault(
+	perCpuStats = fs.BoolLong(
 		"per-cpu-stats",
-		false,
 		"Provide separate traffic stats per CPU core",
 	)
 	sortColumn = fs.IntLong(
