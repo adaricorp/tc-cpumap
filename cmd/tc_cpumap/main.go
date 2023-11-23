@@ -66,7 +66,7 @@ func init() {
 		"warn",
 	)
 	version := fs.BoolLong("version", "Print version")
-	bpfDebug = fs.BoolLongDefault("bpf-debug", false, "Run eBPF in debugging mode")
+	bpfDebug = fs.BoolLong("bpf-debug", "Run eBPF in debugging mode")
 
 	err := ff.Parse(fs, os.Args[1:],
 		ff.WithEnvVarPrefix("TC_CPUMAP"),
