@@ -13,6 +13,7 @@ import (
 
 	"golang.org/x/exp/maps"
 
+	"github.com/carlmjohnson/versioninfo"
 	"github.com/cilium/ebpf"
 	"github.com/danjacques/gofslock/fslock"
 	"github.com/jedib0t/go-pretty/v6/table"
@@ -53,6 +54,12 @@ func printUsage(cmd *ff.Command) {
 	os.Exit(1)
 }
 
+// Print program version
+func printVersion() {
+	fmt.Printf("tc_cpumap_config %s\n", versioninfo.Short())
+	os.Exit(0)
+}
+
 func init() {
 	rootFlags := ff.NewFlagSet("tc_cpumap_config")
 	logLevel = rootFlags.StringEnumLong(
@@ -63,6 +70,7 @@ func init() {
 		"error",
 		"warn",
 	)
+	version := rootFlags.BoolLong("version", "Print version")
 	rootCommand := &ff.Command{
 		Name:  "tc_cpumap_config",
 		Usage: "tc_cpumap_config [FLAGS] <SUBCOMMAND> ...",
@@ -99,6 +107,10 @@ func init() {
 	)
 	if err != nil {
 		printUsage(rootCommand)
+	}
+
+	if *version {
+		printVersion()
 	}
 
 	if selected := showCommand.GetSelected(); selected != nil {
