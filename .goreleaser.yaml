@@ -1,0 +1,59 @@
+---
+before:
+  hooks:
+    - ./boot.sh
+    - go generate ./...
+    - go mod tidy
+
+builds:
+  - id: tc_cpumap
+    binary: tc_cpumap
+    main: ./cmd/tc_cpumap
+    env:
+      - CGO_ENABLED=0
+    goos:
+      - linux
+    goarch:
+      - 386
+      - amd64
+      - arm
+      - arm64
+    goarm:
+      - 6
+      - 7
+  - id: tc_cpumap_config
+    binary: tc_cpumap_config
+    main: ./cmd/config
+    env:
+      - CGO_ENABLED=0
+    goos:
+      - linux
+    goarch:
+      - 386
+      - amd64
+      - arm
+      - arm64
+    goarm:
+      - 6
+      - 7
+  - id: tc_cpumap_trafficstats
+    binary: tc_cpumap_trafficstats
+    main: ./cmd/trafficstats
+    env:
+      - CGO_ENABLED=0
+    goos:
+      - linux
+    goarch:
+      - 386
+      - amd64
+      - arm
+      - arm64
+    goarm:
+      - 6
+      - 7
+
+checksum:
+  name_template: 'checksums.txt'
+
+# yaml-language-server: $schema=https://goreleaser.com/static/schema.json
+# vim: set ts=2 sw=2 tw=0 fo=cnqoj
