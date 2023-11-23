@@ -13,6 +13,7 @@ import (
 	"git.adari.cloud/adari/tc_cpumap/tc"
 	"golang.org/x/sys/unix"
 
+	"github.com/carlmjohnson/versioninfo"
 	"github.com/cilium/ebpf"
 	"github.com/jedib0t/go-pretty/v6/table"
 	"github.com/peterbourgon/ff/v4"
@@ -31,8 +32,15 @@ func printUsage(fs ff.Flags) {
 	os.Exit(1)
 }
 
+// Print program version
+func printVersion() {
+	fmt.Printf("tc_cpumap_trafficstats %s\n", versioninfo.Short())
+	os.Exit(0)
+}
+
 func init() {
 	fs := ff.NewFlagSet("tc_cpumap_traffic_stats")
+	version := fs.BoolLong("version", "Print version")
 	perCpuStats = fs.BoolLongDefault(
 		"per-cpu-stats",
 		false,
@@ -47,6 +55,10 @@ func init() {
 	err := ff.Parse(fs, os.Args[1:])
 	if err != nil {
 		printUsage(fs)
+	}
+
+	if *version {
+		printVersion()
 	}
 }
 

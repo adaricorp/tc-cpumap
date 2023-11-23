@@ -3,6 +3,7 @@ module git.adari.cloud/adari/tc_cpumap
 go 1.21
 
 require (
+	github.com/carlmjohnson/versioninfo v0.22.5
 	github.com/cilium/ebpf v0.12.3
 	github.com/danjacques/gofslock v0.0.0-20230728142113-ae8f59f9e88b
 	github.com/florianl/go-tc v0.4.2

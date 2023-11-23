@@ -15,6 +15,7 @@ import (
 
 	"golang.org/x/sys/unix"
 
+	"github.com/carlmjohnson/versioninfo"
 	"github.com/cilium/ebpf"
 	"github.com/cilium/ebpf/link"
 	"github.com/danjacques/gofslock/fslock"
@@ -46,6 +47,12 @@ func printUsage(fs ff.Flags) {
 	os.Exit(1)
 }
 
+// Print program version
+func printVersion() {
+	fmt.Printf("tc_cpumap %s\n", versioninfo.Short())
+	os.Exit(0)
+}
+
 func init() {
 	fs := ff.NewFlagSet("tc_cpumap")
 	internetIfaceNames = fs.StringSetLong("wan", "Internet interface(s) to attach to")
@@ -58,6 +65,7 @@ func init() {
 		"error",
 		"warn",
 	)
+	version := fs.BoolLong("version", "Print version")
 	bpfDebug = fs.BoolLongDefault("bpf-debug", false, "Run eBPF in debugging mode")
 
 	err := ff.Parse(fs, os.Args[1:],
@@ -66,6 +74,10 @@ func init() {
 	)
 	if err != nil {
 		printUsage(fs)
+	}
+
+	if *version {
+		printVersion()
 	}
 
 	if len(*internetIfaceNames) == 0 && len(*clientIfaceNames) == 0 {
