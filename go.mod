@@ -13,7 +13,7 @@ require (
 	github.com/pkg/errors v0.9.1
 	github.com/safchain/ethtool v0.3.0
 	golang.org/x/exp v0.0.0-20231006140011-7918f672742d
-	golang.org/x/sys v0.14.1-0.20231108175955-e4099bfacb8c
+	golang.org/x/sys v0.15.0
 	gopkg.in/yaml.v2 v2.4.0
 )
 
