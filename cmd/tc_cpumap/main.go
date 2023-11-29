@@ -255,7 +255,7 @@ func attachTc(
 // Detatch eBPF programs, unload eBPF objects, restore XPS masks and close TC netlink connection
 func cleanup(
 	oldIfaceFeatures map[string]map[string]bool,
-	oldXpsMasks map[string]map[string][]byte,
+	oldXpsMasks map[string]TxQueueXpsConfig,
 	objs bpf.BpfObjects,
 	links []link.Link,
 	tcnl *tc.Tc,
@@ -500,10 +500,10 @@ func restoreNicOffloads(oldIfaceFeatures map[string]map[string]bool) {
 	}
 }
 
-func disableXps() (map[string]map[string][]byte, error) {
+func disableXps() (map[string]TxQueueXpsConfig, error) {
 	ifaces := append(*internetIfaceNames, *clientIfaceNames...)
 
-	oldXpsMasks := make(map[string]map[string][]byte, len(ifaces))
+	oldXpsMasks := make(map[string]TxQueueXpsConfig, len(ifaces))
 
 	for _, ifaceName := range ifaces {
 		txQueues, err := getIfaceQueues(ifaceName, "tx")
@@ -515,7 +515,7 @@ func disableXps() (map[string]map[string][]byte, error) {
 			)
 		}
 
-		oldXpsMasks[ifaceName] = make(map[string][]byte, len(txQueues))
+		oldXpsMasks[ifaceName] = make(TxQueueXpsConfig, len(txQueues))
 
 		for id, queue := range txQueues {
 			mask, err := os.ReadFile(
@@ -527,7 +527,7 @@ func disableXps() (map[string]map[string][]byte, error) {
 			oldXpsMasks[ifaceName][id] = mask
 
 			// Disable XPS
-			newMask := []byte{0}
+			newMask := XpsMask{0}
 
 			if err := os.WriteFile(
 				path.Join("/sys/class/net", ifaceName, "queues", queue, "xps_cpus"),
@@ -547,7 +547,7 @@ func disableXps() (map[string]map[string][]byte, error) {
 	return oldXpsMasks, nil
 }
 
-func restoreXps(oldXpsMasks map[string]map[string][]byte) {
+func restoreXps(oldXpsMasks map[string]TxQueueXpsConfig) {
 	for ifaceName, queues := range oldXpsMasks {
 		for queue, mask := range queues {
 			if err := os.WriteFile(
@@ -590,7 +590,7 @@ func main() {
 		slog.Error("Couldn't configure NIC hardware offloads", "error", err.Error())
 		cleanup(
 			oldIfaceFeatures,
-			map[string]map[string][]byte{},
+			map[string]TxQueueXpsConfig{},
 			bpf.BpfObjects{},
 			[]link.Link{},
 			nil,

@@ -23,15 +23,6 @@ import (
 	"gopkg.in/yaml.v2"
 )
 
-type Mode int
-
-const (
-	ModeUndefined Mode = iota
-	ModeShow
-	ModeUpdate
-	ModeClear
-)
-
 var (
 	lockPath       = "/var/lock/tc_cpumap_config"
 	mode           Mode

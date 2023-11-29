@@ -18,3 +18,5 @@ type PrefixMapping struct {
 	Cpu     int
 	TcMinor int
 }
+
+type Mode int
