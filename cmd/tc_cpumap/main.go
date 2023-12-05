@@ -36,8 +36,13 @@ var (
 	slogLevel          *slog.LevelVar = new(slog.LevelVar)
 	bpfDebug           *bool
 	// NIC offloads to disable or enable
-	nicOffloadConfig = map[string]bool{
+	nicOffloads = EthtoolFeatures{
 		"rx-vlan-hw-parse": false,
+	}
+	// NIC coalesce configuration
+	nicCoalesce = EthtoolCoalesceConfig{
+		"rx-usecs": 8,
+		"tx-usecs": 8,
 	}
 )
 
@@ -254,7 +259,7 @@ func attachTc(
 
 // Detatch eBPF programs, unload eBPF objects, restore XPS masks and close TC netlink connection
 func cleanup(
-	oldIfaceFeatures map[string]map[string]bool,
+	oldIfaceEthtoolConfig map[string]EthtoolConfig,
 	oldXpsMasks map[string]TxQueueXpsConfig,
 	objs bpf.BpfObjects,
 	links []link.Link,
@@ -281,8 +286,8 @@ func cleanup(
 	// Restore XPS masks for NIC queues back to what they were
 	restoreXps(oldXpsMasks)
 
-	// Restore NIC hardware offloads back to what they were
-	restoreNicOffloads(oldIfaceFeatures)
+	// Restore NIC ethtool settings back to what they were
+	restoreNic(oldIfaceEthtoolConfig)
 
 	if tcnl != nil {
 		if err := tcnl.Close(); err != nil {
@@ -440,62 +445,114 @@ func getIfaceQueues(ifaceName string, direction string) (map[string]string, erro
 	return queues, nil
 }
 
-func configureNicOffloads() (map[string]map[string]bool, error) {
+func configureNic(
+	ethtoolFeatures EthtoolFeatures,
+	ethtoolCoalesceConfig EthtoolCoalesceConfig,
+) (map[string]EthtoolConfig, error) {
 	ifaces := append(*internetIfaceNames, *clientIfaceNames...)
 
-	oldIfaceFeatures := make(map[string]map[string]bool, len(ifaces))
+	oldIfaceEthtoolConfig := make(map[string]EthtoolConfig, len(ifaces))
 
 	ethtool, err := ethtool.NewEthtool()
 	if err != nil {
-		return oldIfaceFeatures, errors.Wrap(err, "Couldn't create new ethtool")
+		return oldIfaceEthtoolConfig, errors.Wrap(err, "Couldn't create new ethtool")
 	}
 	defer ethtool.Close()
 
 	for _, ifaceName := range ifaces {
+		// Handle features
+
 		features, err := ethtool.Features(ifaceName)
 		if err != nil {
-			return oldIfaceFeatures, errors.Wrapf(
+			return oldIfaceEthtoolConfig, errors.Wrapf(
 				err,
 				"Couldn't get features for %v",
 				ifaceName,
 			)
 		}
 
-		curFeatureConfig := map[string]bool{}
-		newFeatureConfig := map[string]bool{}
-		for offload, newState := range nicOffloadConfig {
+		curFeatureConfig := EthtoolFeatures{}
+		newFeatureConfig := EthtoolFeatures{}
+		for offload, newState := range ethtoolFeatures {
 			if _, ok := features[offload]; ok {
 				curFeatureConfig[offload] = features[offload]
 				newFeatureConfig[offload] = newState
 			}
 		}
 
-		oldIfaceFeatures[ifaceName] = curFeatureConfig
+		oldIfaceEthtoolConfig[ifaceName] = EthtoolConfig{
+			Features: curFeatureConfig,
+		}
 
-		err = ethtool.Change(ifaceName, newFeatureConfig)
-		if err != nil {
-			return oldIfaceFeatures, errors.Wrapf(
+		if err = ethtool.Change(ifaceName, newFeatureConfig); err != nil {
+			return oldIfaceEthtoolConfig, errors.Wrapf(
 				err,
 				"Couldn't set features for %v",
 				ifaceName,
 			)
 		}
+
+		// Handle coalesce config
+
+		curCoalesce, err := ethtool.GetCoalesce(ifaceName)
+		if err != nil {
+			return oldIfaceEthtoolConfig, errors.Wrapf(
+				err,
+				"Couldn't get coalesce configuration for %v",
+				ifaceName,
+			)
+		}
+
+		oldIfaceEthtoolConfig[ifaceName] = EthtoolConfig{
+			Features: curFeatureConfig,
+			Coalesce: curCoalesce,
+		}
+
+		newCoalesce := curCoalesce
+
+		for config, value := range ethtoolCoalesceConfig {
+			switch config {
+			case "rx-usecs":
+				newCoalesce.RxCoalesceUsecs = value
+			case "tx-usecs":
+				newCoalesce.TxCoalesceUsecs = value
+			}
+		}
+
+		if _, err := ethtool.SetCoalesce(ifaceName, newCoalesce); err != nil {
+			slog.Error(
+				"Couldn't set coalesce configuration",
+				"interface",
+				ifaceName,
+				"error",
+				err,
+			)
+		}
 	}
 
-	return oldIfaceFeatures, nil
+	return oldIfaceEthtoolConfig, nil
 }
 
-func restoreNicOffloads(oldIfaceFeatures map[string]map[string]bool) {
+func restoreNic(oldIfaceEthtoolConfig map[string]EthtoolConfig) {
 	ethtool, err := ethtool.NewEthtool()
 	if err != nil {
 		slog.Error("Couldn't create new ethtool", "error", err.Error())
 	}
 	defer ethtool.Close()
 
-	for ifaceName, features := range oldIfaceFeatures {
-		err = ethtool.Change(ifaceName, features)
-		if err != nil {
+	for ifaceName, ethtoolConfig := range oldIfaceEthtoolConfig {
+		if err = ethtool.Change(ifaceName, ethtoolConfig.Features); err != nil {
 			slog.Error("Couldn't set features", "interface", ifaceName)
+		}
+
+		if _, err = ethtool.SetCoalesce(ifaceName, ethtoolConfig.Coalesce); err != nil {
+			slog.Error(
+				"Couldn't set coalesce configuration",
+				"interface",
+				ifaceName,
+				"error",
+				err,
+			)
 		}
 	}
 }
@@ -583,13 +640,13 @@ func main() {
 		os.Exit(1)
 	}
 
-	slog.Info("Configuring NIC offloads")
+	slog.Info("Configuring NIC")
 
-	oldIfaceFeatures, err := configureNicOffloads()
+	oldIfaceEthtoolConfig, err := configureNic(nicOffloads, nicCoalesce)
 	if err != nil {
-		slog.Error("Couldn't configure NIC hardware offloads", "error", err.Error())
+		slog.Error("Couldn't configure NIC", "error", err.Error())
 		cleanup(
-			oldIfaceFeatures,
+			oldIfaceEthtoolConfig,
 			map[string]TxQueueXpsConfig{},
 			bpf.BpfObjects{},
 			[]link.Link{},
@@ -605,7 +662,7 @@ func main() {
 	if err != nil {
 		slog.Error("Couldn't disable XPS", "error", err.Error())
 		cleanup(
-			oldIfaceFeatures,
+			oldIfaceEthtoolConfig,
 			oldXpsMasks,
 			bpf.BpfObjects{},
 			[]link.Link{},
@@ -620,7 +677,14 @@ func main() {
 	objs, err := loadBpf()
 	if err != nil {
 		slog.Error("Couldn't load BPF objects", "error", err.Error())
-		cleanup(oldIfaceFeatures, oldXpsMasks, objs, []link.Link{}, nil, []tc.Object{})
+		cleanup(
+			oldIfaceEthtoolConfig,
+			oldXpsMasks,
+			objs,
+			[]link.Link{},
+			nil,
+			[]tc.Object{},
+		)
 		os.Exit(1)
 	}
 
@@ -630,7 +694,14 @@ func main() {
 	tcnl, err := tc.Open(&tc.Config{})
 	if err != nil {
 		slog.Error("Couldn't open rtnetlink socket", "error", err.Error())
-		cleanup(oldIfaceFeatures, oldXpsMasks, objs, []link.Link{}, tcnl, []tc.Object{})
+		cleanup(
+			oldIfaceEthtoolConfig,
+			oldXpsMasks,
+			objs,
+			[]link.Link{},
+			tcnl,
+			[]tc.Object{},
+		)
 		os.Exit(1)
 	}
 
@@ -652,7 +723,7 @@ func main() {
 	var tcQdiscs []tc.Object
 	if links, tcQdiscs, err = attachBpf(tcnl, objs); err != nil {
 		slog.Error("Couldn't attach BPF objects", "error", err.Error())
-		cleanup(oldIfaceFeatures, oldXpsMasks, objs, links, tcnl, tcQdiscs)
+		cleanup(oldIfaceEthtoolConfig, oldXpsMasks, objs, links, tcnl, tcQdiscs)
 		os.Exit(1)
 	}
 
@@ -662,5 +733,5 @@ func main() {
 	signal.Notify(exitSignal, os.Interrupt, syscall.SIGTERM)
 	<-exitSignal
 	// On exit clean up
-	cleanup(oldIfaceFeatures, oldXpsMasks, objs, links, tcnl, tcQdiscs)
+	cleanup(oldIfaceEthtoolConfig, oldXpsMasks, objs, links, tcnl, tcQdiscs)
 }
