@@ -67,6 +67,12 @@ To load the eBPF programs into the kernel and attach to the network interfaces, 
 sudo tc_cpumap --wan eno1 --lan eno2
 ```
 
+It is also possible to configure tc\_cpumap by using envionment variables:
+
+```
+sudo TC_CPUMAP_WAN="eno1" TC_CPUMAP_LAN="eno2 eno3" tc_cpumap
+```
+
 ## Configuring
 
 First, load the TC qdiscs and classes, xdp-cpumap-tc provides an
