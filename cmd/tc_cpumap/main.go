@@ -11,7 +11,7 @@ import (
 	"slices"
 	"syscall"
 
-	"git.adari.cloud/adari/tc_cpumap/bpf"
+	"github.com/adaricorp/tc-cpumap/bpf"
 
 	"golang.org/x/sys/unix"
 

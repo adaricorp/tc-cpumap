@@ -1,4 +1,4 @@
-module git.adari.cloud/adari/tc_cpumap
+module github.com/adaricorp/tc-cpumap
 
 go 1.21
 

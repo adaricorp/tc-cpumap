@@ -9,8 +9,8 @@ import (
 	"sort"
 	"time"
 
-	"git.adari.cloud/adari/tc_cpumap/bpf"
-	"git.adari.cloud/adari/tc_cpumap/tc"
+	"github.com/adaricorp/tc-cpumap/bpf"
+	"github.com/adaricorp/tc-cpumap/tc"
 	"golang.org/x/sys/unix"
 
 	"github.com/carlmjohnson/versioninfo"
