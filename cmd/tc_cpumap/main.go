@@ -436,9 +436,6 @@ func getIfaceQueues(ifaceName string, direction string) (map[string]string, erro
 
 	for _, queueDir := range queueDirs {
 		id := filepath.Base(queueDir)
-		if err != nil {
-			return map[string]string{}, err
-		}
 		queues[id] = filepath.Base(queueDir)
 	}
 
