@@ -261,7 +261,7 @@ func attachTc(
 func cleanup(
 	oldIfaceEthtoolConfig map[string]EthtoolConfig,
 	oldXpsMasks map[string]TxQueueXpsConfig,
-	objs bpf.BpfObjects,
+	bpfObjs bpf.BpfObjects,
 	links []link.Link,
 	tcnl *tc.Tc,
 	tcQdiscs []tc.Object,
@@ -279,7 +279,7 @@ func cleanup(
 	}
 
 	// Unload eBPF objects
-	if err := objs.Close(); err != nil {
+	if err := bpfObjs.Close(); err != nil {
 		slog.Error("Couldn't unload eBPF objects", "error", err.Error())
 	}
 
@@ -640,50 +640,60 @@ func main() {
 		os.Exit(1)
 	}
 
+	// Variables used for cleanup
+	var (
+		oldIfaceEthtoolConfig map[string]EthtoolConfig
+		oldXpsMasks                  = map[string]TxQueueXpsConfig{}
+		bpfObjs                      = bpf.BpfObjects{}
+		links                        = []link.Link{}
+		tcQdiscs                     = []tc.Object{}
+		tcnl                  *tc.Tc = nil
+	)
+
 	slog.Info("Configuring NIC")
 
-	oldIfaceEthtoolConfig, err := configureNic(nicOffloads, nicCoalesce)
+	oldIfaceEthtoolConfig, err = configureNic(nicOffloads, nicCoalesce)
 	if err != nil {
 		slog.Error("Couldn't configure NIC", "error", err.Error())
 		cleanup(
 			oldIfaceEthtoolConfig,
-			map[string]TxQueueXpsConfig{},
-			bpf.BpfObjects{},
-			[]link.Link{},
-			nil,
-			[]tc.Object{},
+			oldXpsMasks,
+			bpfObjs,
+			links,
+			tcnl,
+			tcQdiscs,
 		)
 		os.Exit(1)
 	}
 
 	slog.Info("Disabling XPS")
 
-	oldXpsMasks, err := disableXps()
+	oldXpsMasks, err = disableXps()
 	if err != nil {
 		slog.Error("Couldn't disable XPS", "error", err.Error())
 		cleanup(
 			oldIfaceEthtoolConfig,
 			oldXpsMasks,
-			bpf.BpfObjects{},
-			[]link.Link{},
-			nil,
-			[]tc.Object{},
+			bpfObjs,
+			links,
+			tcnl,
+			tcQdiscs,
 		)
 		os.Exit(1)
 	}
 
 	slog.Info("Loading eBPF programs and maps")
 
-	objs, err := loadBpf()
+	bpfObjs, err = loadBpf()
 	if err != nil {
 		slog.Error("Couldn't load BPF objects", "error", err.Error())
 		cleanup(
 			oldIfaceEthtoolConfig,
 			oldXpsMasks,
-			objs,
-			[]link.Link{},
-			nil,
-			[]tc.Object{},
+			bpfObjs,
+			links,
+			tcnl,
+			tcQdiscs,
 		)
 		os.Exit(1)
 	}
@@ -691,16 +701,16 @@ func main() {
 	// Open a netlink/tc connection to the Linux kernel. This connection is
 	// used to manage the tc/qdisc and tc/filter to which
 	// the eBPF program will be attached
-	tcnl, err := tc.Open(&tc.Config{})
+	tcnl, err = tc.Open(&tc.Config{})
 	if err != nil {
 		slog.Error("Couldn't open rtnetlink socket", "error", err.Error())
 		cleanup(
 			oldIfaceEthtoolConfig,
 			oldXpsMasks,
-			objs,
-			[]link.Link{},
+			bpfObjs,
+			links,
 			tcnl,
-			[]tc.Object{},
+			tcQdiscs,
 		)
 		os.Exit(1)
 	}
@@ -719,11 +729,16 @@ func main() {
 
 	slog.Info("Attaching eBPF programs to interfaces")
 
-	var links []link.Link
-	var tcQdiscs []tc.Object
-	if links, tcQdiscs, err = attachBpf(tcnl, objs); err != nil {
+	if links, tcQdiscs, err = attachBpf(tcnl, bpfObjs); err != nil {
 		slog.Error("Couldn't attach BPF objects", "error", err.Error())
-		cleanup(oldIfaceEthtoolConfig, oldXpsMasks, objs, links, tcnl, tcQdiscs)
+		cleanup(
+			oldIfaceEthtoolConfig,
+			oldXpsMasks,
+			bpfObjs,
+			links,
+			tcnl,
+			tcQdiscs,
+		)
 		os.Exit(1)
 	}
 
@@ -733,5 +748,12 @@ func main() {
 	signal.Notify(exitSignal, os.Interrupt, syscall.SIGTERM)
 	<-exitSignal
 	// On exit clean up
-	cleanup(oldIfaceEthtoolConfig, oldXpsMasks, objs, links, tcnl, tcQdiscs)
+	cleanup(
+		oldIfaceEthtoolConfig,
+		oldXpsMasks,
+		bpfObjs,
+		links,
+		tcnl,
+		tcQdiscs,
+	)
 }
