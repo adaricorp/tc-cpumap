@@ -1,7 +1,5 @@
 github.com/adaricorp/ethtool v0.0.0-20231205220919-d9ef55171812 h1:w3HzI9bAp8q2/TtT3wt1stYwdD5LKvkbHz2oxRAOZow=
 github.com/adaricorp/ethtool v0.0.0-20231205220919-d9ef55171812/go.mod h1:iuXF81MmqJQpDYxhrpZ7DHzLQ9NXszQa35I8f5PEHLM=
-github.com/carlmjohnson/versioninfo v0.22.5 h1:O00sjOLUAFxYQjlN/bzYTuZiS0y6fWDQjMRvwtKgwwc=
-github.com/carlmjohnson/versioninfo v0.22.5/go.mod h1:QT9mph3wcVfISUKd0i9sZfVrPviHuSF+cUtLjm2WSf8=
 github.com/cilium/ebpf v0.5.0/go.mod h1:4tRaxcgiL706VnOzHOdBlY8IEAIdxINsQBcU4xJJXRs=
 github.com/cilium/ebpf v0.7.0/go.mod h1:/oI2+1shJiTGAMgl6/RgJr36Eo1jzrRcAWbcXO2usCA=
 github.com/cilium/ebpf v0.8.1/go.mod h1:f5zLIM0FSNuAkSyLAN7X+Hy6yznlF1mNiWUMfxMtrgk=

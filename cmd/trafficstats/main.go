@@ -13,7 +13,6 @@ import (
 	"github.com/adaricorp/tc-cpumap/tc"
 	"golang.org/x/sys/unix"
 
-	"github.com/carlmjohnson/versioninfo"
 	"github.com/cilium/ebpf"
 	"github.com/jedib0t/go-pretty/v6/table"
 	"github.com/peterbourgon/ff/v4"
@@ -21,6 +20,9 @@ import (
 )
 
 var (
+	version = "dev"
+	date    = "unknown"
+
 	perCpuStats *bool
 	sortColumn  *int
 	bootTime    time.Time
@@ -34,7 +36,7 @@ func printUsage(fs ff.Flags) {
 
 // Print program version
 func printVersion() {
-	fmt.Printf("tc_cpumap_trafficstats %s\n", versioninfo.Short())
+	fmt.Printf("tc_cpumap_trafficstats v%s built on %s\n", version, date)
 	os.Exit(0)
 }
 
