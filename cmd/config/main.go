@@ -8,8 +8,8 @@ import (
 	"os"
 	"path"
 
-	"git.adari.cloud/adari/tc_cpumap/bpf"
-	"git.adari.cloud/adari/tc_cpumap/tc"
+	"github.com/adaricorp/tc-cpumap/bpf"
+	"github.com/adaricorp/tc-cpumap/tc"
 
 	"golang.org/x/exp/maps"
 
