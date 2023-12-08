@@ -17,7 +17,6 @@ import (
 
 	"golang.org/x/sys/unix"
 
-	"github.com/carlmjohnson/versioninfo"
 	"github.com/cilium/ebpf"
 	"github.com/cilium/ebpf/link"
 	"github.com/danjacques/gofslock/fslock"
@@ -31,6 +30,9 @@ import (
 )
 
 var (
+	version = "dev"
+	date    = "unknown"
+
 	lockPath           = "/var/lock/tc_cpumap"
 	internetIfaceNames *[]string
 	clientIfaceNames   *[]string
@@ -58,7 +60,7 @@ func printUsage(fs ff.Flags) {
 
 // Print program version
 func printVersion() {
-	fmt.Printf("tc_cpumap %s\n", versioninfo.Short())
+	fmt.Printf("tc_cpumap v%s built on %s\n", version, date)
 	os.Exit(0)
 }
 

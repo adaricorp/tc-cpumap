@@ -13,7 +13,6 @@ import (
 
 	"golang.org/x/exp/maps"
 
-	"github.com/carlmjohnson/versioninfo"
 	"github.com/cilium/ebpf"
 	"github.com/danjacques/gofslock/fslock"
 	"github.com/jedib0t/go-pretty/v6/table"
@@ -24,6 +23,9 @@ import (
 )
 
 var (
+	version = "dev"
+	date    = "unknown"
+
 	lockPath       = "/var/lock/tc_cpumap_config"
 	mode           Mode
 	configFilePath *string
@@ -47,7 +49,7 @@ func printUsage(cmd *ff.Command) {
 
 // Print program version
 func printVersion() {
-	fmt.Printf("tc_cpumap_config %s\n", versioninfo.Short())
+	fmt.Printf("tc_cpumap_config v%s built on %s\n", version, date)
 	os.Exit(0)
 }
 
