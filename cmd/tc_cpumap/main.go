@@ -8,7 +8,9 @@ import (
 	"os/signal"
 	"path"
 	"path/filepath"
+	"runtime"
 	"slices"
+	"strings"
 	"syscall"
 
 	"git.adari.cloud/adari/tc_cpumap/bpf"
@@ -32,6 +34,8 @@ var (
 	lockPath           = "/var/lock/tc_cpumap"
 	internetIfaceNames *[]string
 	clientIfaceNames   *[]string
+	rxCpus             *[]string
+	rxCpuIrqStrategy   *string
 	logLevel           *string
 	slogLevel          *slog.LevelVar = new(slog.LevelVar)
 	bpfDebug           *bool
@@ -62,6 +66,17 @@ func init() {
 	fs := ff.NewFlagSet("tc_cpumap")
 	internetIfaceNames = fs.StringSetLong("wan", "Internet interface(s) to attach to")
 	clientIfaceNames = fs.StringSetLong("lan", "Client interface(s) to attach to")
+	rxCpus = fs.StringSetLong(
+		"rx-cpu",
+		"CPU core(s) to use for handling NIC RX queues, or \"all\" to use all CPU cores")
+	rxCpuIrqStrategy = fs.StringEnumLong(
+		"rx-cpu-irq-strategy",
+		`Strategy to use when assigning CPU core(s) to NIC RX queues:
+		"all", RX CPU cores will be assigned IRQs for all NIC RX queues
+		"round-robin", RX CPU cores will be round-robin assigned to NIC RX queues`,
+		"all",
+		"round-robin",
+	)
 	logLevel = fs.StringEnumLong(
 		"log-level",
 		"Log level: debug, info, warn, error",
@@ -130,6 +145,23 @@ func init() {
 			printUsage(fs)
 		}
 
+	}
+
+	if slices.Contains(*rxCpus, "all") {
+		*rxCpus = []string{}
+		for c := 0; c < runtime.NumCPU(); c++ {
+			*rxCpus = append(*rxCpus, fmt.Sprintf("%d", c))
+
+		}
+	}
+
+	for _, cpu := range *rxCpus {
+		// Check CPU core exists
+		cpuFile := path.Join("/sys/devices/system/cpu", fmt.Sprintf("cpu%s", cpu))
+		if _, err := os.Stat(cpuFile); err != nil {
+			fmt.Fprintf(os.Stderr, "CPU %v does not exist\n", cpu)
+			printUsage(fs)
+		}
 	}
 
 	switch *logLevel {
@@ -261,6 +293,7 @@ func attachTc(
 func cleanup(
 	oldIfaceEthtoolConfig map[string]EthtoolConfig,
 	oldXpsMasks map[string]TxQueueXpsConfig,
+	oldIrqAffinities map[string]string,
 	bpfObjs bpf.BpfObjects,
 	links []link.Link,
 	tcnl *tc.Tc,
@@ -282,6 +315,9 @@ func cleanup(
 	if err := bpfObjs.Close(); err != nil {
 		slog.Error("Couldn't unload eBPF objects", "error", err.Error())
 	}
+
+	// Restore IRQ affinities
+	restoreIrqAffinity(oldIrqAffinities)
 
 	// Restore XPS masks for NIC queues back to what they were
 	restoreXps(oldXpsMasks)
@@ -621,6 +657,108 @@ func restoreXps(oldXpsMasks map[string]TxQueueXpsConfig) {
 	}
 }
 
+func irqAffinity() (map[string]string, error) {
+	ifaces := append(*internetIfaceNames, *clientIfaceNames...)
+
+	oldIrqAffinities := make(map[string]string, len(ifaces))
+
+	irqs := []string{}
+	for _, ifaceName := range ifaces {
+		symlink, err := filepath.EvalSymlinks(fmt.Sprintf("/sys/class/net/%s", ifaceName))
+		if err != nil {
+			return oldIrqAffinities, errors.Wrapf(
+				err,
+				"Couldn't find %v in /sys",
+				ifaceName,
+			)
+		}
+		irqsDir := fmt.Sprintf(
+			"%s/msi_irqs",
+			strings.Join(strings.Split(symlink, "/")[0:6], "/"),
+		)
+		irqsGlob := path.Join(irqsDir, "*")
+		irqFiles, err := filepath.Glob(irqsGlob)
+		if err != nil {
+			return oldIrqAffinities, errors.Wrapf(
+				err,
+				"Couldn't find msi_irqs for %v",
+				ifaceName,
+			)
+		}
+
+		for _, irqFile := range irqFiles {
+			irq := filepath.Base(irqFile)
+
+			buf, err := os.ReadFile(
+				path.Join("/sys/kernel/irq", irq, "actions"),
+			)
+			irqActions := string(buf)
+			if err != nil {
+				return oldIrqAffinities, errors.Wrapf(
+					err,
+					"Couldn't read actions for IRQ %v",
+					irq,
+				)
+			}
+
+			if strings.Contains(irqActions, "async") ||
+				strings.Contains(irqActions, "fdir") {
+				// Skip certain types of NIC IRQs
+				continue
+			}
+
+			irqs = append(irqs, irq)
+		}
+	}
+
+	for i, irq := range irqs {
+		affinityListFile := path.Join("/proc/irq", irq, "smp_affinity_list")
+		buf, err := os.ReadFile(affinityListFile)
+		if err != nil {
+			return oldIrqAffinities, errors.Wrapf(
+				err,
+				"Couldn't read smp_affinity_list for IRQ %v",
+				irq,
+			)
+		}
+
+		oldIrqAffinities[irq] = string(buf)
+
+		var cpuList string
+		switch *rxCpuIrqStrategy {
+		case "all":
+			cpuList = strings.Join(*rxCpus, ",")
+		case "round-robin":
+			cpuList = (*rxCpus)[i%len(*rxCpus)]
+		}
+
+		if err := os.WriteFile(affinityListFile, []byte(cpuList), 0644); err != nil {
+			return oldIrqAffinities, errors.Wrapf(
+				err,
+				"Couldn't write smp_affinity_list for IRQ %v",
+				irq,
+			)
+		}
+	}
+
+	return oldIrqAffinities, nil
+}
+
+func restoreIrqAffinity(oldIrqAffinities map[string]string) {
+	for irq, affinity := range oldIrqAffinities {
+		affinityListFile := path.Join("/proc/irq", irq, "smp_affinity_list")
+		if err := os.WriteFile(affinityListFile, []byte(affinity), 0644); err != nil {
+			slog.Error(
+				"Couldn't restore original CPU affinity",
+				"irq",
+				irq,
+				"affinity",
+				affinity,
+			)
+		}
+	}
+}
+
 func main() {
 	// Acquire exclusive lock
 	_, err := fslock.Lock(lockPath)
@@ -639,6 +777,7 @@ func main() {
 	var (
 		oldIfaceEthtoolConfig map[string]EthtoolConfig
 		oldXpsMasks                  = map[string]TxQueueXpsConfig{}
+		oldIrqAffinities             = map[string]string{}
 		bpfObjs                      = bpf.BpfObjects{}
 		links                        = []link.Link{}
 		tcQdiscs                     = []tc.Object{}
@@ -653,6 +792,7 @@ func main() {
 		cleanup(
 			oldIfaceEthtoolConfig,
 			oldXpsMasks,
+			oldIrqAffinities,
 			bpfObjs,
 			links,
 			tcnl,
@@ -669,12 +809,32 @@ func main() {
 		cleanup(
 			oldIfaceEthtoolConfig,
 			oldXpsMasks,
+			oldIrqAffinities,
 			bpfObjs,
 			links,
 			tcnl,
 			tcQdiscs,
 		)
 		os.Exit(1)
+	}
+
+	if len(*rxCpus) > 0 {
+		slog.Info("Configuring RX CPU cores")
+
+		oldIrqAffinities, err = irqAffinity()
+		if err != nil {
+			slog.Error("Couldn't set IRQ affinity", "error", err.Error())
+			cleanup(
+				oldIfaceEthtoolConfig,
+				oldXpsMasks,
+				oldIrqAffinities,
+				bpfObjs,
+				links,
+				tcnl,
+				tcQdiscs,
+			)
+			os.Exit(1)
+		}
 	}
 
 	slog.Info("Loading eBPF programs and maps")
@@ -685,6 +845,7 @@ func main() {
 		cleanup(
 			oldIfaceEthtoolConfig,
 			oldXpsMasks,
+			oldIrqAffinities,
 			bpfObjs,
 			links,
 			tcnl,
@@ -702,6 +863,7 @@ func main() {
 		cleanup(
 			oldIfaceEthtoolConfig,
 			oldXpsMasks,
+			oldIrqAffinities,
 			bpfObjs,
 			links,
 			tcnl,
@@ -729,6 +891,7 @@ func main() {
 		cleanup(
 			oldIfaceEthtoolConfig,
 			oldXpsMasks,
+			oldIrqAffinities,
 			bpfObjs,
 			links,
 			tcnl,
@@ -746,6 +909,7 @@ func main() {
 	cleanup(
 		oldIfaceEthtoolConfig,
 		oldXpsMasks,
+		oldIrqAffinities,
 		bpfObjs,
 		links,
 		tcnl,
