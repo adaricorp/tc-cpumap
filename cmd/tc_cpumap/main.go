@@ -572,9 +572,11 @@ func disableXps() (map[string]TxQueueXpsConfig, error) {
 		oldXpsMasks[ifaceName] = make(TxQueueXpsConfig, len(txQueues))
 
 		for id, queue := range txQueues {
-			mask, err := os.ReadFile(
-				path.Join("/sys/class/net", ifaceName, "queues", queue, "xps_cpus"),
+			xpsCpusFile := path.Join(
+				"/sys/class/net", ifaceName, "queues", queue, "xps_cpus",
 			)
+
+			mask, err := os.ReadFile(xpsCpusFile)
 			if err != nil {
 				return oldXpsMasks, err
 			}
@@ -583,11 +585,7 @@ func disableXps() (map[string]TxQueueXpsConfig, error) {
 			// Disable XPS
 			newMask := XpsMask{0}
 
-			if err := os.WriteFile(
-				path.Join("/sys/class/net", ifaceName, "queues", queue, "xps_cpus"),
-				newMask,
-				0644,
-			); err != nil {
+			if err := os.WriteFile(xpsCpusFile, newMask, 0644); err != nil {
 				return oldXpsMasks, errors.Wrapf(
 					err,
 					"Couldn't disable XPS on %v %v",
@@ -604,11 +602,11 @@ func disableXps() (map[string]TxQueueXpsConfig, error) {
 func restoreXps(oldXpsMasks map[string]TxQueueXpsConfig) {
 	for ifaceName, queues := range oldXpsMasks {
 		for queue, mask := range queues {
-			if err := os.WriteFile(
-				path.Join("/sys/class/net", ifaceName, "queues", queue, "xps_cpus"),
-				mask,
-				0644,
-			); err != nil {
+			xpsCpusFile := path.Join(
+				"/sys/class/net", ifaceName, "queues", queue, "xps_cpus",
+			)
+
+			if err := os.WriteFile(xpsCpusFile, mask, 0644); err != nil {
 				slog.Error(
 					"Couldn't restore original XPS mask",
 					"interface",
