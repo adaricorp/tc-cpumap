@@ -10,7 +10,7 @@ require (
 	github.com/mdlayher/netlink v1.7.2
 	github.com/peterbourgon/ff/v4 v4.0.0-alpha.4
 	github.com/pkg/errors v0.9.1
-	github.com/safchain/ethtool v0.3.0
+	github.com/safchain/ethtool v0.3.1-0.20231213212400-1127ba950900
 	golang.org/x/exp v0.0.0-20231006140011-7918f672742d
 	golang.org/x/sys v0.15.0
 	gopkg.in/yaml.v2 v2.4.0
@@ -27,5 +27,3 @@ require (
 	golang.org/x/net v0.17.0 // indirect
 	golang.org/x/sync v0.5.0 // indirect
 )
-
-replace github.com/safchain/ethtool => github.com/adaricorp/ethtool v0.0.0-20231205220919-d9ef55171812
