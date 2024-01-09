@@ -5,7 +5,7 @@ go 1.21
 require (
 	github.com/cilium/ebpf v0.12.3
 	github.com/danjacques/gofslock v0.0.0-20230728142113-ae8f59f9e88b
-	github.com/florianl/go-tc v0.4.2
+	github.com/florianl/go-tc v0.4.3
 	github.com/jedib0t/go-pretty/v6 v6.5.2
 	github.com/mdlayher/netlink v1.7.2
 	github.com/peterbourgon/ff/v4 v4.0.0-alpha.4
