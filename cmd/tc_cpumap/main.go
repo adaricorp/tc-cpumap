@@ -66,19 +66,7 @@ func printVersion() {
 
 func init() {
 	fs := ff.NewFlagSet("tc_cpumap")
-	internetIfaceNames = fs.StringSetLong("wan", "Internet interface(s) to attach to")
-	clientIfaceNames = fs.StringSetLong("lan", "Client interface(s) to attach to")
-	rxCpus = fs.StringSetLong(
-		"rx-cpu",
-		"CPU core(s) to use for handling NIC RX queues, or \"all\" to use all CPU cores")
-	rxCpuIrqStrategy = fs.StringEnumLong(
-		"rx-cpu-irq-strategy",
-		`Strategy to use when assigning CPU core(s) to NIC RX queues:
-		"all", RX CPU cores will be assigned IRQs for all NIC RX queues
-		"round-robin", RX CPU cores will be round-robin assigned to NIC RX queues`,
-		"all",
-		"round-robin",
-	)
+	displayVersion := fs.BoolLong("version", "Print version")
 	logLevel = fs.StringEnumLong(
 		"log-level",
 		"Log level: debug, info, warn, error",
@@ -87,8 +75,18 @@ func init() {
 		"error",
 		"warn",
 	)
-	version := fs.BoolLong("version", "Print version")
 	bpfDebug = fs.BoolLong("bpf-debug", "Run eBPF in debugging mode")
+	internetIfaceNames = fs.StringSetLong("wan", "Internet interface(s) to attach to")
+	clientIfaceNames = fs.StringSetLong("lan", "Client interface(s) to attach to")
+	rxCpus = fs.StringSetLong(
+		"rx-cpu",
+		"CPU core(s) to use for handling NIC RX queues, or \"all\" to use all CPU cores")
+	rxCpuIrqStrategy = fs.StringEnumLong(
+		"rx-cpu-irq-strategy",
+		"Strategy to use when assigning CPU core(s) to NIC RX queues: all or round-robin",
+		"all",         // RX CPU cores will be assigned IRQs for all NIC RX queues
+		"round-robin", // RX CPU cores will be round-robin assigned to NIC RX queues
+	)
 
 	err := ff.Parse(fs, os.Args[1:],
 		ff.WithEnvVarPrefix("TC_CPUMAP"),
@@ -98,7 +96,7 @@ func init() {
 		printUsage(fs)
 	}
 
-	if *version {
+	if *displayVersion {
 		printVersion()
 	}
 

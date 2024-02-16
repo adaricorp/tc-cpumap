@@ -63,7 +63,7 @@ func init() {
 		"error",
 		"warn",
 	)
-	version := rootFlags.BoolLong("version", "Print version")
+	displayVersion := rootFlags.BoolLong("version", "Print version")
 	rootCommand := &ff.Command{
 		Name:  "tc_cpumap_config",
 		Usage: "tc_cpumap_config [FLAGS] <SUBCOMMAND> ...",
@@ -102,7 +102,7 @@ func init() {
 		printUsage(rootCommand)
 	}
 
-	if *version {
+	if *displayVersion {
 		printVersion()
 	}
 

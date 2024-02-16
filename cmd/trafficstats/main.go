@@ -42,7 +42,7 @@ func printVersion() {
 
 func init() {
 	fs := ff.NewFlagSet("tc_cpumap_trafficstats")
-	version := fs.BoolLong("version", "Print version")
+	displayVersion := fs.BoolLong("version", "Print version")
 	perCpuStats = fs.BoolLong(
 		"per-cpu-stats",
 		"Provide separate traffic stats per CPU core",
@@ -58,7 +58,7 @@ func init() {
 		printUsage(fs)
 	}
 
-	if *version {
+	if *displayVersion {
 		printVersion()
 	}
 }
