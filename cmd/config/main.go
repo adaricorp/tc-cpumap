@@ -55,6 +55,7 @@ func printVersion() {
 
 func init() {
 	rootFlags := ff.NewFlagSet("tc_cpumap_config")
+	displayVersion := rootFlags.BoolLong("version", "Print version")
 	logLevel = rootFlags.StringEnumLong(
 		"log-level",
 		"Log level: debug, info, warn, error",
@@ -63,7 +64,6 @@ func init() {
 		"error",
 		"warn",
 	)
-	displayVersion := rootFlags.BoolLong("version", "Print version")
 	rootCommand := &ff.Command{
 		Name:  "tc_cpumap_config",
 		Usage: "tc_cpumap_config [FLAGS] <SUBCOMMAND> ...",
