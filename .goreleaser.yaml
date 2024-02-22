@@ -2,8 +2,6 @@
 before:
   hooks:
     - ./boot.sh
-    - go generate ./...
-    - go mod tidy
 
 builds:
   - id: tc_cpumap
