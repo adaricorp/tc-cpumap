@@ -1,9 +1,10 @@
 module github.com/adaricorp/tc-cpumap
 
 go 1.21
+toolchain go1.22.0
 
 require (
-	github.com/cilium/ebpf v0.12.3
+	github.com/cilium/ebpf v0.13.2
 	github.com/danjacques/gofslock v0.0.0-20240212154529-d899e02bfe22
 	github.com/florianl/go-tc v0.4.3
 	github.com/jedib0t/go-pretty/v6 v6.5.4
@@ -22,7 +23,6 @@ require (
 	github.com/mattn/go-runewidth v0.0.15 // indirect
 	github.com/mdlayher/socket v0.5.0 // indirect
 	github.com/rivo/uniseg v0.4.4 // indirect
-	github.com/rogpeppe/go-internal v1.11.0 // indirect
 	golang.org/x/net v0.17.0 // indirect
 	golang.org/x/sync v0.5.0 // indirect
 )
