@@ -75,7 +75,10 @@ func init() {
 		"error",
 		"warn",
 	)
-	bpfDebug = fs.BoolLong("bpf-debug", "Run eBPF in debugging mode")
+	bpfDebug = fs.BoolLong(
+		"bpf-debug",
+		"Write eBPF debug messages to /sys/kernel/debug/tracing/trace_pipe",
+	)
 	internetIfaceNames = fs.StringSetLong("wan", "Internet interface(s) to attach to")
 	clientIfaceNames = fs.StringSetLong("lan", "Client interface(s) to attach to")
 	rxCpus = fs.StringSetLong(
