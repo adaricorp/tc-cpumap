@@ -32,7 +32,7 @@ static __always_inline void track_traffic(int direction, struct in6_addr *key,
   if (counter) {
     counter->last_seen = bpf_ktime_get_boot_ns();
     counter->tc_handle = tc_handle;
-    if (direction == 1) {
+    if (direction == DIRECTION_INTERNET) {
       // Download
       counter->download_packets += 1;
       counter->download_bytes += size;
@@ -45,7 +45,7 @@ static __always_inline void track_traffic(int direction, struct in6_addr *key,
     struct host_counter new_host = {0};
     new_host.tc_handle = tc_handle;
     new_host.last_seen = bpf_ktime_get_boot_ns();
-    if (direction == 1) {
+    if (direction == DIRECTION_INTERNET) {
       new_host.download_packets = 1;
       new_host.download_bytes = size;
       new_host.upload_bytes = 0;
