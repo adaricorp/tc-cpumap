@@ -11,6 +11,7 @@
 #include "common/bpf.h"
 #include "common/constants.h"
 #include "common/debug.h"
+#include "common/direction.h"
 #include "common/dissector.h"
 #include "common/lpm.h"
 #include "common/maps.h"
@@ -131,10 +132,19 @@ int xdp_prog(struct xdp_md *ctx) {
     }
   }
 
-  // Update the traffic tracking buffers
-  track_traffic(direction, &lookup_key.address,
+  // Update the local traffic tracking buffers
+  track_traffic(TRAFFIC_MAP_LOCAL, direction, &lookup_key.address,
                 ctx->data_end - ctx->data, // end - data = length
                 tc_handle);
+
+  struct in6_addr remote_address =
+      (direction == DIRECTION_INTERNET) ? dissector.src_ip : dissector.dst_ip;
+
+  // Update the remote traffic tracking buffers
+  track_traffic(TRAFFIC_MAP_REMOTE, reverse_direction(direction),
+                &remote_address,
+                ctx->data_end - ctx->data, // end - data = length
+                0);
 
   if (tc_handle != 0) {
     // Handle CPU redirection if there is one specified

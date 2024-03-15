@@ -23,6 +23,7 @@ var (
 	version = "dev"
 	date    = "unknown"
 
+	bpfMaps     = []string{"local", "remote"}
 	perCpuStats *bool
 	sortColumn  *int
 	bootTime    time.Time
@@ -67,19 +68,19 @@ func decodeLastSeenTime(lastseen uint64) string {
 	return bootTime.Add(time.Duration(lastseen)).Format(time.RFC3339)
 }
 
-func printMap(m *ebpf.Map) error {
+func printMap(mapName string, m *ebpf.Map) error {
 	t := table.NewWriter()
-	t.SetTitle("Traffic stats")
+	t.SetTitle(fmt.Sprintf("Traffic stats - %v", mapName))
 
 	if *perCpuStats {
 		t.AppendHeader(
 			table.Row{
 				"IP",
 				"RX CPU",
-				"Download",
-				"Download",
-				"Upload",
-				"Upload",
+				"Sent",
+				"Sent",
+				"Received",
+				"Received",
 				"TC handle",
 				"Last seen",
 			},
@@ -101,10 +102,10 @@ func printMap(m *ebpf.Map) error {
 		t.AppendHeader(
 			table.Row{
 				"IP",
-				"Download",
-				"Download",
-				"Upload",
-				"Upload",
+				"Sent",
+				"Sent",
+				"Received",
+				"Received",
 				"TC handle",
 				"Last seen",
 			},
@@ -137,10 +138,10 @@ func printMap(m *ebpf.Map) error {
 					[]interface{}{
 						ip.Unmap(),
 						cpu,
-						val.DownloadBytes,
-						val.DownloadPackets,
-						val.UploadBytes,
-						val.UploadPackets,
+						val.TxBytes,
+						val.TxPackets,
+						val.RxBytes,
+						val.RxPackets,
 						tc.TcHandleString(val.TcHandle),
 						val.LastSeen,
 						decodeLastSeenTime(val.LastSeen),
@@ -157,10 +158,10 @@ func printMap(m *ebpf.Map) error {
 			})
 
 			for _, val := range vals {
-				aggData.DownloadBytes += val.DownloadBytes
-				aggData.DownloadPackets += val.DownloadPackets
-				aggData.UploadBytes += val.UploadBytes
-				aggData.UploadPackets += val.UploadPackets
+				aggData.TxBytes += val.TxBytes
+				aggData.TxPackets += val.TxPackets
+				aggData.RxBytes += val.RxBytes
+				aggData.RxPackets += val.RxPackets
 
 				aggData.TcHandle = val.TcHandle
 				aggData.LastSeen = val.LastSeen
@@ -169,10 +170,10 @@ func printMap(m *ebpf.Map) error {
 			t.AppendRow(
 				[]interface{}{
 					ip.Unmap(),
-					aggData.DownloadBytes,
-					aggData.DownloadPackets,
-					aggData.UploadBytes,
-					aggData.UploadPackets,
+					aggData.TxBytes,
+					aggData.TxPackets,
+					aggData.RxBytes,
+					aggData.RxPackets,
 					tc.TcHandleString(aggData.TcHandle),
 					decodeLastSeenTime(aggData.LastSeen),
 				},
@@ -205,18 +206,21 @@ func main() {
 	}
 	bootTime = time.Now().Add(-1 * time.Duration(bootTimespec.Nano()))
 
-	mapTraffic, err := ebpf.LoadPinnedMap(
-		path.Join(bpf.MapPinPath, "map_traffic"),
-		&ebpf.LoadPinOptions{
-			ReadOnly: true,
-		},
-	)
-	if err != nil {
-		log.Fatalf("Error loading map: %v", err)
-	}
+	for _, mapName := range bpfMaps {
+		mapFileName := fmt.Sprintf("map_traffic_%v", mapName)
+		mapTraffic, err := ebpf.LoadPinnedMap(
+			path.Join(bpf.MapPinPath, mapFileName),
+			&ebpf.LoadPinOptions{
+				ReadOnly: true,
+			},
+		)
+		if err != nil {
+			log.Fatalf("Error loading map: %v", err)
+		}
 
-	err = printMap(mapTraffic)
-	if err != nil {
-		log.Fatalf("Error reading map: %s", err)
+		err = printMap(mapName, mapTraffic)
+		if err != nil {
+			log.Fatalf("Error reading map: %s", err)
+		}
 	}
 }
