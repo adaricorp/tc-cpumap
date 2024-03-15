@@ -33,6 +33,12 @@ jobs:
           version: latest
           args: release --clean --skip=publish --snapshot
 
+      - name: Upload build artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: tc-cpumap
+          path: dist/
+
   codechecks:
     name: Code checks
     runs-on: ubuntu-latest
