@@ -1,13 +1,13 @@
 module github.com/adaricorp/tc-cpumap
 
 go 1.21
-toolchain go1.22.0
+toolchain go1.22.1
 
 require (
 	github.com/cilium/ebpf v0.13.2
 	github.com/danjacques/gofslock v0.0.0-20240212154529-d899e02bfe22
 	github.com/florianl/go-tc v0.4.3
-	github.com/jedib0t/go-pretty/v6 v6.5.4
+	github.com/jedib0t/go-pretty/v6 v6.5.5
 	github.com/mdlayher/netlink v1.7.2
 	github.com/peterbourgon/ff/v4 v4.0.0-alpha.4
 	github.com/pkg/errors v0.9.1
