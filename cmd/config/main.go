@@ -31,6 +31,7 @@ var (
 	configFilePath *string
 	logLevel       *string
 	slogLevel      *slog.LevelVar = new(slog.LevelVar)
+	batchMode      *bool
 
 	bpfMapNames = []string{
 		"cpu_map",
@@ -63,6 +64,10 @@ func init() {
 		"debug",
 		"error",
 		"warn",
+	)
+	batchMode = rootFlags.BoolLong(
+		"batch-mode",
+		"Runs in reduced output mode suitable for batch scripts",
 	)
 	rootCommand := &ff.Command{
 		Name:  "tc_cpumap_config",
@@ -185,6 +190,12 @@ func updateIpToCpuAndTcMap(
 		return err
 	}
 
+	if mode == ModeClear && len(keysToDelete) > 0 {
+		slog.Info("Cleared IP to CPU and TC handle map")
+	} else if mode == ModeUpdate && (len(keysToDelete) > 0 || len(entries) > 0) {
+		slog.Info("Updated IP to CPU and TC handle map")
+	}
+
 	return nil
 }
 
@@ -223,22 +234,48 @@ func updateCpuRedirectionMap(
 		}
 	}
 
+	if mode == ModeClear && len(keysToDelete) > 0 {
+		slog.Info("Cleared CPU redirection map")
+	} else if mode == ModeUpdate && (len(keysToDelete) > 0 || len(entries) > 0) {
+		slog.Info("Updated CPU redirection map")
+	}
+
 	return nil
 }
 
 func updateCpuTxQueueConfigMap(
 	ebpfMap *ebpf.Map,
-	entriesToAdd map[uint32]bpf.BpfTxqConfig,
+	entries map[uint32]bpf.BpfTxqConfig,
 ) error {
+	// Get current map state
+	iter := ebpfMap.Iterate()
+	curEntries := map[uint32]bpf.BpfTxqConfig{}
+	var curKey uint32
+	var curVal bpf.BpfTxqConfig
+	for iter.Next(&curKey, &curVal) {
+		curEntries[curKey] = curVal
+	}
+
+	if maps.Equal(entries, curEntries) {
+		// No update necessary for map
+		return nil
+	}
+
 	keys := []uint32{}
 	vals := []bpf.BpfTxqConfig{}
-	for k, v := range entriesToAdd {
+	for k, v := range entries {
 		keys = append(keys, k)
 		vals = append(vals, v)
 	}
 
 	if _, err := ebpfMap.BatchUpdate(keys, vals, &ebpf.BatchOptions{}); err != nil {
 		return err
+	}
+
+	if mode == ModeClear {
+		slog.Info("Cleared CPU TX queue map")
+	} else if mode == ModeUpdate {
+		slog.Info("Updated CPU TX queue map")
 	}
 
 	return nil
@@ -246,17 +283,37 @@ func updateCpuTxQueueConfigMap(
 
 func updateAvailableCpuMap(
 	ebpfMap *ebpf.Map,
-	entriesToAdd map[uint32]uint32,
+	entries map[uint32]uint32,
 ) error {
+	// Get current map state
+	iter := ebpfMap.Iterate()
+	curEntries := map[uint32]uint32{}
+	var curKey uint32
+	var curVal uint32
+	for iter.Next(&curKey, &curVal) {
+		curEntries[curKey] = curVal
+	}
+
+	if maps.Equal(entries, curEntries) {
+		// No update necessary for map
+		return nil
+	}
+
 	keys := []uint32{}
 	vals := []uint32{}
-	for k, v := range entriesToAdd {
+	for k, v := range entries {
 		keys = append(keys, k)
 		vals = append(vals, v)
 	}
 
 	if _, err := ebpfMap.BatchUpdate(keys, vals, &ebpf.BatchOptions{}); err != nil {
 		return err
+	}
+
+	if mode == ModeClear {
+		slog.Info("Cleared available CPUs map")
+	} else if mode == ModeUpdate {
+		slog.Info("Updated available CPUs map")
 	}
 
 	return nil
@@ -423,15 +480,6 @@ func main() {
 	)
 
 	switch mode {
-	case ModeShow:
-		slog.Info("Showing current state of eBPF maps")
-	case ModeClear:
-		slog.Info("Clearing and showing new state of eBPF maps")
-	case ModeUpdate:
-		slog.Info("Updating and showing new state of eBPF maps")
-	}
-
-	switch mode {
 	case ModeClear:
 		cpuMap = map[int]bpf.BpfTxqConfig{}
 		prefixMap = map[string]PrefixMapping{}
@@ -506,12 +554,6 @@ func main() {
 		}
 	}
 
-	// Print interface direction map
-	if err := printDirectionMap(bpfMaps["map_ifindex_direction"]); err != nil {
-		slog.Error("Failed to print interface direction map", "error", err.Error())
-		os.Exit(1)
-	}
-
 	if mode == ModeUpdate || mode == ModeClear {
 		// Populate CPU redirects
 		cpuRedirects := make(map[uint32]uint32, len(maps.Keys(cpuMap)))
@@ -524,12 +566,6 @@ func main() {
 			slog.Error("Failed to update CPU redirection map", "error", err.Error())
 			os.Exit(1)
 		}
-	}
-
-	// Print CPU redirection map
-	if err := printCpuMap(bpfMaps["cpu_map"]); err != nil {
-		slog.Error("Failed to print CPU redirection map", "error", err.Error())
-		os.Exit(1)
 	}
 
 	if mode == ModeUpdate || mode == ModeClear {
@@ -564,18 +600,6 @@ func main() {
 			slog.Error("Failed to update available CPUs map", "error", err.Error())
 			os.Exit(1)
 		}
-	}
-
-	// Print CPU TX queue config map
-	if err := printTxqConfigMap(bpfMaps["map_txq_config"]); err != nil {
-		slog.Error("Failed to print CPU TX queue map", "error", err.Error())
-		os.Exit(1)
-	}
-
-	// Print available CPU map
-	if err := printCpusAvailableMap(bpfMaps["cpus_available"]); err != nil {
-		slog.Error("Failed to print available CPUs map", "error", err.Error())
-		os.Exit(1)
 	}
 
 	if mode == ModeUpdate || mode == ModeClear {
@@ -625,9 +649,35 @@ func main() {
 		}
 	}
 
-	// Print IP to CPU and TC handle map
-	if err := printIpToCpuAndTcMap(bpfMaps["map_ip_to_cpu_and_tc"]); err != nil {
-		slog.Error("Failed to print IP to CPU and TC handle map", "error", err.Error())
-		os.Exit(1)
+	if !*batchMode {
+		// Print interface direction map
+		if err := printDirectionMap(bpfMaps["map_ifindex_direction"]); err != nil {
+			slog.Error("Failed to print interface direction map", "error", err.Error())
+			os.Exit(1)
+		}
+
+		// Print CPU redirection map
+		if err := printCpuMap(bpfMaps["cpu_map"]); err != nil {
+			slog.Error("Failed to print CPU redirection map", "error", err.Error())
+			os.Exit(1)
+		}
+
+		// Print CPU TX queue config map
+		if err := printTxqConfigMap(bpfMaps["map_txq_config"]); err != nil {
+			slog.Error("Failed to print CPU TX queue map", "error", err.Error())
+			os.Exit(1)
+		}
+
+		// Print available CPU map
+		if err := printCpusAvailableMap(bpfMaps["cpus_available"]); err != nil {
+			slog.Error("Failed to print available CPUs map", "error", err.Error())
+			os.Exit(1)
+		}
+
+		// Print IP to CPU and TC handle map
+		if err := printIpToCpuAndTcMap(bpfMaps["map_ip_to_cpu_and_tc"]); err != nil {
+			slog.Error("Failed to print IP to CPU and TC handle map", "error", err.Error())
+			os.Exit(1)
+		}
 	}
 }
