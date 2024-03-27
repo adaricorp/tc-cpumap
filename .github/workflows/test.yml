@@ -26,12 +26,18 @@ jobs:
         run: |
           sudo apt -y install clang linux-tools-common linux-tools-$(uname -r) llvm
 
+      - name: Set build date
+        run: |
+          echo "BUILD_DATE=$(date)" >> ${GITHUB_ENV}
+
       - name: Run GoReleaser
         uses: goreleaser/goreleaser-action@v5
         with:
           distribution: goreleaser
           version: latest
           args: release --clean --skip=publish --snapshot
+        env:
+          BUILD_USER: ${{ github.actor }} (via Github Actions)
 
       - name: Upload build artifacts
         uses: actions/upload-artifact@v4
@@ -62,6 +68,7 @@ jobs:
       - name: Lint
         uses: golangci/golangci-lint-action@v4
         with:
+          skip-pkg-cache: true
           args: --out-format=github-actions,line-number
 
       - name: Govulncheck
