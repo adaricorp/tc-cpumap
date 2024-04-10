@@ -1,7 +1,7 @@
 module github.com/adaricorp/tc-cpumap
 
 go 1.21
-toolchain go1.22.1
+toolchain go1.22.2
 
 require (
 	github.com/cilium/ebpf v0.14.0
@@ -14,7 +14,7 @@ require (
 	github.com/peterbourgon/ff/v4 v4.0.0-alpha.4
 	github.com/pkg/errors v0.9.1
 	github.com/prometheus/client_golang v1.19.0
-	github.com/prometheus/common v0.51.0
+	github.com/prometheus/common v0.52.2
 	github.com/prometheus/exporter-toolkit v0.11.0
 	github.com/safchain/ethtool v0.3.1-0.20231213212400-1127ba950900
 	golang.org/x/exp v0.0.0-20240318143956-a85f2c67cd81
