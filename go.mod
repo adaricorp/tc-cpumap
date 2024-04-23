@@ -4,7 +4,7 @@ go 1.21
 toolchain go1.22.2
 
 require (
-	github.com/cilium/ebpf v0.14.0
+	github.com/cilium/ebpf v0.15.0
 	github.com/danjacques/gofslock v0.0.0-20240212154529-d899e02bfe22
 	github.com/florianl/go-tc v0.4.3
 	github.com/go-kit/log v0.2.1
