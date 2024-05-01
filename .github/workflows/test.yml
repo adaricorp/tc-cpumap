@@ -66,9 +66,8 @@ jobs:
         run: ./boot.sh
 
       - name: Lint
-        uses: golangci/golangci-lint-action@v4
+        uses: golangci/golangci-lint-action@v5
         with:
-          skip-pkg-cache: true
           args: --out-format=github-actions,line-number
 
       - name: Govulncheck
