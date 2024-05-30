@@ -18,6 +18,7 @@ import (
 	"golang.org/x/sys/unix"
 
 	"github.com/cilium/ebpf"
+	"github.com/cilium/ebpf/btf"
 	"github.com/cilium/ebpf/link"
 	"github.com/danjacques/gofslock/fslock"
 	"github.com/florianl/go-tc"
@@ -38,6 +39,7 @@ var (
 	clientIfaceNames   *[]string
 	rxCpus             *[]string
 	rxCpuIrqStrategy   *string
+	ctZoneId           *uint
 	logLevel           *string
 	slogLevel          *slog.LevelVar = new(slog.LevelVar)
 	bpfDebug           *bool
@@ -90,6 +92,7 @@ func init() {
 		"all",         // RX CPU cores will be assigned IRQs for all NIC RX queues
 		"round-robin", // RX CPU cores will be round-robin assigned to NIC RX queues
 	)
+	ctZoneId = fs.UintLong("ct-zone-id", 0, "Conntrack zone id to use for lookups")
 
 	err := ff.Parse(fs, os.Args[1:],
 		ff.WithEnvVarPrefix("TC_CPUMAP"),
@@ -339,6 +342,40 @@ func loadBpf() (bpf.BpfObjects, error) {
 	bpfSpec, err := bpf.LoadBpf()
 	if err != nil {
 		return bpf.BpfObjects{}, errors.Wrap(err, "Parsing BPF ELF file failed")
+	}
+
+	if err := bpfSpec.RewriteConstants(map[string]interface{}{
+		"CT_ZONE_ID": uint16(*ctZoneId),
+	}); err != nil {
+		slog.Error("Couldn't rewrite CT_ZONE_ID constant", "error", err.Error())
+	}
+
+	if _, err := os.Stat("/sys/kernel/btf/nf_conntrack"); err == nil {
+		conntrackSpec, err := btf.LoadKernelModuleSpec("nf_conntrack")
+		if err != nil {
+			slog.Error("Couldn't load nf_conntrack BTF", "error", err.Error())
+		} else {
+			iter := conntrackSpec.Iterate()
+			for iter.Next() {
+				if _, ok := iter.Type.(*btf.Enum); !ok {
+					continue
+				}
+				for _, i := range iter.Type.(*btf.Enum).Values {
+					if i.Name == "NF_BPF_CT_OPTS_SZ" {
+						if err := bpfSpec.RewriteConstants(
+							map[string]interface{}{
+								"BPF_CT_OPTS_SIZE": uint32(i.Value),
+							},
+						); err != nil {
+							slog.Error(
+								"Couldn't rewrite BPF_CT_OPTS_SIZE constant",
+								"error", err.Error(),
+							)
+						}
+					}
+				}
+			}
+		}
 	}
 
 	bpfProgOpts := ebpf.ProgramOptions{}

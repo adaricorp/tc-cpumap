@@ -4,6 +4,7 @@
 #include "debug.h"
 #include "if_ether.h"
 #include "ip_hash.h"
+#include "math.h"
 #include "nf_conntrack_bpf.h"
 #include "skb_safety.h"
 #include "tcp_opts.h"
@@ -222,14 +223,20 @@ static __always_inline void resolve_nat(struct dissector_t *dissector) {
           .sport = dissector->src_port,
           .dport = dissector->dst_port,
       }};
-  struct bpf_ct_opts ct_lookup_opts = {.netns_id = BPF_F_CURRENT_NETNS,
-                                       .l4proto = dissector->ip_protocol};
+  struct bpf_ct_opts___local ct_lookup_opts = {
+      .netns_id = BPF_F_CURRENT_NETNS,
+      .l4proto = dissector->ip_protocol,
+  };
+
+  if (BPF_CT_OPTS_SIZE >= 16) {
+    ct_lookup_opts.ct_zone_id = CT_ZONE_ID;
+  }
 
   if (dissector->ctx) {
     // Do conntrack lookup from XDP
     struct nf_conn *ct = bpf_xdp_ct_lookup(
         dissector->ctx, &lookup_tuple, sizeof(lookup_tuple.ipv4),
-        &ct_lookup_opts, sizeof(ct_lookup_opts));
+        &ct_lookup_opts, MIN(BPF_CT_OPTS_SIZE, sizeof(ct_lookup_opts)));
     if (ct) {
       if (ct->status & IPS_SRC_NAT) {
         dissector->nat = true;
@@ -241,7 +248,7 @@ static __always_inline void resolve_nat(struct dissector_t *dissector) {
     // Do conntrack lookup from TC
     struct nf_conn *ct = bpf_skb_ct_lookup(
         dissector->skb, &lookup_tuple, sizeof(lookup_tuple.ipv4),
-        &ct_lookup_opts, sizeof(ct_lookup_opts));
+        &ct_lookup_opts, MIN(BPF_CT_OPTS_SIZE, sizeof(ct_lookup_opts)));
     if (ct) {
       if (ct->status & IPS_SRC_NAT) {
         dissector->nat = true;
