@@ -3,7 +3,7 @@
 set -euo pipefail
 
 # Version of libbpf to fetch headers from
-LIBBPF_VERSION=1.3.0
+LIBBPF_VERSION=1.4.2
 
 # The headers we want
 prefix="libbpf-${LIBBPF_VERSION}"
@@ -18,5 +18,5 @@ headers=(
 libbpf_dir=$(dirname "$0")
 
 # Fetch libbpf release and extract the desired headers
-curl -sL "https://github.com/libbpf/libbpf/archive/refs/tags/v${LIBBPF_VERSION}.tar.gz" | \
+curl -sL "https://github.com/libbpf/libbpf/archive/refs/tags/v${LIBBPF_VERSION}.tar.gz" |
     tar -C "${libbpf_dir}" -xz --xform='s#.*/##' "${headers[@]}"
