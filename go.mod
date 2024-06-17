@@ -16,7 +16,7 @@ require (
 	github.com/prometheus/client_golang v1.19.1
 	github.com/prometheus/common v0.54.0
 	github.com/prometheus/exporter-toolkit v0.11.0
-	github.com/safchain/ethtool v0.3.1-0.20231213212400-1127ba950900
+	github.com/safchain/ethtool v0.4.0
 	golang.org/x/exp v0.0.0-20240318143956-a85f2c67cd81
 	golang.org/x/sys v0.21.0
 	gopkg.in/yaml.v2 v2.4.0
