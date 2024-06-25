@@ -1,4 +1,6 @@
 ---
+version: 2
+
 before:
   hooks:
     - ./boot.sh
