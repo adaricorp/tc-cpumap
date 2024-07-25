@@ -6,7 +6,7 @@ toolchain go1.22.5
 require (
 	github.com/cilium/ebpf v0.15.0
 	github.com/danjacques/gofslock v0.0.0-20240212154529-d899e02bfe22
-	github.com/florianl/go-tc v0.4.3
+	github.com/florianl/go-tc v0.4.4
 	github.com/go-kit/log v0.2.1
 	github.com/jedib0t/go-pretty/v6 v6.5.9
 	github.com/mdlayher/netlink v1.7.2
