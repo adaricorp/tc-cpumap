@@ -385,7 +385,6 @@ func loadBpf() (bpf.BpfObjects, error) {
 
 		// Turn on verifier instruction level debugging
 		bpfProgOpts.LogLevel = ebpf.LogLevelInstruction
-		bpfProgOpts.LogSize = 1000000000
 
 		// Rewrite BPF program to enable per-packet debug logging to
 		// /sys/kernel/debug/tracing/trace_pipe
