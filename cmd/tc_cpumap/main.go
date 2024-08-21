@@ -812,6 +812,18 @@ func main() {
 		os.Exit(1)
 	}
 
+	slog.Info(
+		"Starting tc_cpumap",
+		"version",
+		version,
+		"build_context",
+		fmt.Sprintf(
+			"go=%s, platform=%s",
+			runtime.Version(),
+			runtime.GOOS+"/"+runtime.GOARCH,
+		),
+	)
+
 	// Variables used for cleanup
 	var (
 		oldIfaceEthtoolConfig map[string]EthtoolConfig
