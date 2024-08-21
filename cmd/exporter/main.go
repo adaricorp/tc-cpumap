@@ -11,6 +11,7 @@ import (
 	"github.com/peterbourgon/ff/v4"
 	"github.com/peterbourgon/ff/v4/ffhelp"
 	"github.com/prometheus/client_golang/prometheus"
+	versioncollector "github.com/prometheus/client_golang/prometheus/collectors/version"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
 	"github.com/prometheus/common/promlog"
 	"github.com/prometheus/common/version"
@@ -105,6 +106,9 @@ func main() {
 			level.Error(logger).Log("msg", "Error parsing TC class names", "err", err)
 		}
 	}
+
+	versionCollector := versioncollector.NewCollector("tc_cpumap")
+	prometheus.MustRegister(versionCollector)
 
 	tcCpumapCollector := newTcCpumapCollector(logger, tcHandleNames)
 	prometheus.MustRegister(tcCpumapCollector)
