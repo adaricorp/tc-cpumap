@@ -1,6 +1,6 @@
 module github.com/adaricorp/tc-cpumap
 
-go 1.23.0
+go 1.23
 
 require (
 	github.com/cilium/ebpf v0.16.0
