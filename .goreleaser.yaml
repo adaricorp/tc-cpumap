@@ -69,6 +69,7 @@ builds:
     ldflags:
       - >
           -s
+          -w
           -X "github.com/prometheus/common/version.Version={{ .Version }}"
           {{- if index .Env "GITHUB_REF_NAME" }}
           -X "github.com/prometheus/common/version.Revision={{ .Env.GITHUB_SHA }}"
