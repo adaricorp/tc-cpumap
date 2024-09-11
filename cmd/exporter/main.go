@@ -34,7 +34,7 @@ func printUsage(fs ff.Flags) {
 
 // Print program version
 func printVersion() {
-	fmt.Printf("tc_cpumap_exporter %v %v\n", version.Info(), version.BuildContext())
+	fmt.Printf("tc_cpumap_exporter v%s built on %s\n", version.Version, version.BuildDate)
 	os.Exit(0)
 }
 
