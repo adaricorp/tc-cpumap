@@ -27,10 +27,6 @@ jobs:
         run: |
           sudo apt -y install clang linux-tools-common linux-tools-$(uname -r) llvm
 
-      - name: Set build date
-        run: |
-          echo "BUILD_DATE=$(date)" >> ${GITHUB_ENV}
-
       - name: Run GoReleaser
         uses: goreleaser/goreleaser-action@v6
         with:
