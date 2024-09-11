@@ -5,15 +5,15 @@ import (
 	"net/http"
 	_ "net/http/pprof"
 	"os"
+	"strings"
 
 	"github.com/adaricorp/tc-cpumap/tc"
-	"github.com/go-kit/log/level"
 	"github.com/peterbourgon/ff/v4"
 	"github.com/peterbourgon/ff/v4/ffhelp"
 	"github.com/prometheus/client_golang/prometheus"
 	versioncollector "github.com/prometheus/client_golang/prometheus/collectors/version"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
-	"github.com/prometheus/common/promlog"
+	"github.com/prometheus/common/promslog"
 	"github.com/prometheus/common/version"
 	"github.com/prometheus/exporter-toolkit/web"
 )
@@ -34,6 +34,15 @@ func init() {
 }
 
 func main() {
+	defaultLogLevel := "info"
+	logLevels := []string{defaultLogLevel}
+	for _, l := range promslog.LevelFlagOptions {
+		if l == defaultLogLevel {
+			continue
+		}
+		logLevels = append(logLevels, l)
+	}
+
 	fs := ff.NewFlagSet("tc_cpumap_exporter")
 	displayVersion := fs.BoolLong("version", "Print version")
 	listenAddr := fs.StringSetLong(
@@ -52,13 +61,19 @@ func main() {
 	)
 	logLevel := fs.StringEnumLong(
 		"log.level",
-		"Only log messages with the given severity or above.",
-		promlog.LevelFlagOptions...,
+		fmt.Sprintf(
+			"Only log messages with the given severity or above. (valid options: %s)",
+			strings.Join(logLevels, ", "),
+		),
+		logLevels...,
 	)
 	logFormat := fs.StringEnumLong(
 		"log.format",
-		"Output format of log messages.",
-		promlog.FormatFlagOptions...,
+		fmt.Sprintf(
+			"Output format of log messages. (valid options: %s)",
+			strings.Join(promslog.FormatFlagOptions, ", "),
+		),
+		promslog.FormatFlagOptions...,
 	)
 
 	err := ff.Parse(fs, os.Args[1:])
@@ -71,17 +86,17 @@ func main() {
 		printVersion()
 	}
 
-	promlogConfig := &promlog.Config{
-		Level:  &promlog.AllowedLevel{},
-		Format: &promlog.AllowedFormat{},
+	logConfig := &promslog.Config{
+		Level:  &promslog.AllowedLevel{},
+		Format: &promslog.AllowedFormat{},
 	}
-	if err := promlogConfig.Level.Set(*logLevel); err != nil {
+	if err := logConfig.Level.Set(*logLevel); err != nil {
 		fmt.Fprintf(os.Stderr, "Error setting log level: %v\n", err)
 	}
-	if err := promlogConfig.Format.Set(*logFormat); err != nil {
+	if err := logConfig.Format.Set(*logFormat); err != nil {
 		fmt.Fprintf(os.Stderr, "Error setting log format: %v\n", err)
 	}
-	logger := promlog.New(promlogConfig)
+	logger := promslog.New(logConfig)
 
 	if len(*listenAddr) == 0 {
 		// Set default value
@@ -93,17 +108,17 @@ func main() {
 		WebConfigFile:      webConfigFile,
 	}
 
-	// nolint:errcheck
-	level.Info(logger).Log("msg", "Starting tc_cpumap_exporter", "version", version.Info())
-	// nolint:errcheck
-	level.Info(logger).Log("build_context", version.BuildContext())
+	logger.Info(
+		"Starting tc_cpumap_exporter",
+		"version", version.Info(),
+		"build_context", version.BuildContext(),
+	)
 
 	var tcHandleNames tc.TcHandleNames
 	if _, err := os.Stat(tc.TC_CLASS_FILE); err == nil {
 		tcHandleNames, err = tc.ParseTcClassFile(tc.TC_CLASS_FILE)
 		if err != nil {
-			// nolint:errcheck
-			level.Error(logger).Log("msg", "Error parsing TC class names", "err", err)
+			logger.Error("Error parsing TC class names", "error", err.Error())
 		}
 	}
 
@@ -125,15 +140,13 @@ func main() {
 <pre>` + version.Info() + ` ` + version.BuildContext() + `</pre>
 </body>
 </html>`)); err != nil {
-			// nolint:errcheck
-			level.Error(logger).Log("error", err)
+			logger.Error("Error writing HTTP response", "error", err.Error())
 		}
 	})
 
 	srv := &http.Server{}
 	if err := web.ListenAndServe(srv, &webConfig, logger); err != nil {
-		// nolint:errcheck
-		level.Error(logger).Log("msg", "Error starting HTTP server", "err", err)
+		logger.Error("Error starting HTTP server", "error", err.Error())
 		os.Exit(1)
 	}
 }
