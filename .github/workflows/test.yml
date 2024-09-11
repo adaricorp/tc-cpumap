@@ -32,8 +32,6 @@ jobs:
           distribution: goreleaser
           version: latest
           args: release --clean --skip=publish --snapshot
-        env:
-          BUILD_USER: ${{ github.actor }} (via Github Actions)
 
       - name: Upload build artifacts
         uses: actions/upload-artifact@v4
