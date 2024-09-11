@@ -1,6 +1,7 @@
 package main
 
 import (
+	"log/slog"
 	"net/netip"
 	"path"
 	"sort"
@@ -8,8 +9,6 @@ import (
 	"github.com/adaricorp/tc-cpumap/bpf"
 	"github.com/adaricorp/tc-cpumap/tc"
 	"github.com/cilium/ebpf"
-	"github.com/go-kit/log"
-	"github.com/go-kit/log/level"
 	"github.com/mitchellh/go-ps"
 	"github.com/prometheus/client_golang/prometheus"
 )
@@ -80,7 +79,7 @@ var (
 )
 
 type tcCpumapCollector struct {
-	logger        log.Logger
+	logger        *slog.Logger
 	tcHandleNames tc.TcHandleNames
 
 	up *prometheus.Desc
@@ -95,7 +94,7 @@ type tcCpumapCollector struct {
 	trafficRemoteTxPackets *prometheus.Desc
 }
 
-func newTcCpumapCollector(logger log.Logger, tcHandleNames tc.TcHandleNames) *tcCpumapCollector {
+func newTcCpumapCollector(logger *slog.Logger, tcHandleNames tc.TcHandleNames) *tcCpumapCollector {
 	return &tcCpumapCollector{
 		logger:                 logger,
 		tcHandleNames:          tcHandleNames,
@@ -141,11 +140,10 @@ func (collector *tcCpumapCollector) collectBpfMapMetrics(ch chan<- prometheus.Me
 			},
 		)
 		if err != nil {
-			// nolint:errcheck
-			level.Error(collector.logger).Log(
-				"msg", "Error loading map",
+			collector.logger.Error(
+				"Error loading map",
 				"map", mapPath,
-				"err", err,
+				"error", err.Error(),
 			)
 			continue
 		}
@@ -253,11 +251,10 @@ func (collector *tcCpumapCollector) collectBpfMapMetrics(ch chan<- prometheus.Me
 		}
 
 		if iter.Err() != nil {
-			// nolint:errcheck
-			level.Error(collector.logger).Log(
-				"msg", "Error reading map",
+			collector.logger.Error(
+				"Error reading map",
 				"map", mapPath,
-				"err", iter.Err(),
+				"error", iter.Err(),
 			)
 		}
 	}
@@ -268,10 +265,9 @@ func (collector *tcCpumapCollector) collectProcessHealth(ch chan<- prometheus.Me
 
 	pids, err := ps.Processes()
 	if err != nil {
-		// nolint:errcheck
-		level.Error(collector.logger).Log(
-			"msg", "Error getting process list",
-			"err", err,
+		collector.logger.Error(
+			"Error getting process list",
+			"error", err.Error(),
 		)
 	} else {
 		for _, p := range pids {

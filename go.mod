@@ -6,7 +6,6 @@ require (
 	github.com/cilium/ebpf v0.16.0
 	github.com/danjacques/gofslock v0.0.0-20240212154529-d899e02bfe22
 	github.com/florianl/go-tc v0.4.4
-	github.com/go-kit/log v0.2.1
 	github.com/jedib0t/go-pretty/v6 v6.5.9
 	github.com/mdlayher/netlink v1.7.2
 	github.com/mitchellh/go-ps v1.0.0
@@ -14,7 +13,7 @@ require (
 	github.com/pkg/errors v0.9.1
 	github.com/prometheus/client_golang v1.20.3
 	github.com/prometheus/common v0.59.1
-	github.com/prometheus/exporter-toolkit v0.12.0
+	github.com/prometheus/exporter-toolkit v0.13.0
 	github.com/safchain/ethtool v0.4.1
 	golang.org/x/exp v0.0.0-20240318143956-a85f2c67cd81
 	golang.org/x/sys v0.25.0
@@ -25,7 +24,6 @@ require (
 	github.com/beorn7/perks v1.0.1 // indirect
 	github.com/cespare/xxhash/v2 v2.3.0 // indirect
 	github.com/coreos/go-systemd/v22 v22.5.0 // indirect
-	github.com/go-logfmt/logfmt v0.6.0 // indirect
 	github.com/google/go-cmp v0.6.0 // indirect
 	github.com/josharian/native v1.1.0 // indirect
 	github.com/jpillora/backoff v1.0.0 // indirect
