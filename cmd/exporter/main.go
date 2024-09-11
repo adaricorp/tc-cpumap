@@ -2,6 +2,7 @@ package main
 
 import (
 	"fmt"
+	"log/slog"
 	"net/http"
 	_ "net/http/pprof"
 	"os"
@@ -18,6 +19,13 @@ import (
 	"github.com/prometheus/exporter-toolkit/web"
 )
 
+var (
+	listenAddr    *[]string
+	metricsPath   *string
+	webConfigFile *string
+	logger        *slog.Logger
+)
+
 // Print program usage
 func printUsage(fs ff.Flags) {
 	fmt.Fprintf(os.Stderr, "%s\n", ffhelp.Flags(fs))
@@ -26,14 +34,11 @@ func printUsage(fs ff.Flags) {
 
 // Print program version
 func printVersion() {
-	fmt.Printf("tc_cpumap_exporter %v %v\n", version.Info(), version.BuildContext())
+	fmt.Printf("tc_cpumap_exporter v%s built on %s\n", version.Version, version.BuildDate)
 	os.Exit(0)
 }
 
 func init() {
-}
-
-func main() {
 	defaultLogLevel := "info"
 	logLevels := []string{defaultLogLevel}
 	for _, l := range promslog.LevelFlagOptions {
@@ -45,16 +50,16 @@ func main() {
 
 	fs := ff.NewFlagSet("tc_cpumap_exporter")
 	displayVersion := fs.BoolLong("version", "Print version")
-	listenAddr := fs.StringSetLong(
+	listenAddr = fs.StringSetLong(
 		"web.listen-address",
 		"Addresses on which to expose metrics and web interface. Repeatable for multiple addresses. (default: :9812)",
 	)
-	metricsPath := fs.StringLong(
+	metricsPath = fs.StringLong(
 		"web.telemetry-path",
 		"/metrics",
 		"Path under which to expose metrics.",
 	)
-	webConfigFile := fs.StringLong(
+	webConfigFile = fs.StringLong(
 		"web.config.file",
 		"",
 		"Path to configuration file that can enable TLS or authentication. See: https://github.com/prometheus/exporter-toolkit/blob/master/docs/web-configuration.md",
@@ -96,13 +101,15 @@ func main() {
 	if err := logConfig.Format.Set(*logFormat); err != nil {
 		fmt.Fprintf(os.Stderr, "Error setting log format: %v\n", err)
 	}
-	logger := promslog.New(logConfig)
+	logger = promslog.New(logConfig)
 
 	if len(*listenAddr) == 0 {
 		// Set default value
 		listenAddr = &[]string{":9812"}
 	}
+}
 
+func main() {
 	webConfig := web.FlagConfig{
 		WebListenAddresses: listenAddr,
 		WebConfigFile:      webConfigFile,
