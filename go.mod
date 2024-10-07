@@ -16,7 +16,7 @@ require (
 	github.com/prometheus/exporter-toolkit v0.13.0
 	github.com/safchain/ethtool v0.4.1
 	golang.org/x/exp v0.0.0-20240318143956-a85f2c67cd81
-	golang.org/x/sys v0.25.0
+	golang.org/x/sys v0.26.0
 	gopkg.in/yaml.v2 v2.4.0
 )
 
