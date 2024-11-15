@@ -78,7 +78,7 @@ static __always_inline void track_traffic(enum traffic_map map, int direction,
       new_host.rx_packets = 0;
     }
     if (bpf_map_update_elem(map_fd, key, &new_host, BPF_NOEXIST) != 0) {
-      if (IN6_IS_ADDR_V4MAPPED(&key)) {
+      if (IN6_IS_ADDR_V4MAPPED(key)) {
         log_debug("Failed to insert flow for IPv4 %pI4",
                   &key->in6_u.u6_addr32[3]);
       } else {
