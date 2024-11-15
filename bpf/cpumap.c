@@ -65,10 +65,12 @@ int xdp_prog(struct xdp_md *ctx) {
     return XDP_PASS;
   }
 
-  if (direction == DIRECTION_INTERNET) {
-    log_debug("Interface direction for ifindex %u is INTERNET.", ifindex);
-  } else if (direction == DIRECTION_CLIENT) {
-    log_debug("Interface direction for ifindex %u is CLIENT.", ifindex);
+  if (DEBUG) {
+    if (direction == DIRECTION_INTERNET) {
+      log_debug("Interface direction for ifindex %u is INTERNET.", ifindex);
+    } else if (direction == DIRECTION_CLIENT) {
+      log_debug("Interface direction for ifindex %u is CLIENT.", ifindex);
+    }
   }
 
   struct dissector_t dissector = {0};
@@ -86,20 +88,23 @@ int xdp_prog(struct xdp_md *ctx) {
     return XDP_PASS;
   }
 
-  if (IN6_IS_ADDR_V4MAPPED(&dissector.src_ip)) {
-    log_debug(
-        "L3 flow ip protocol %u src %pI4:%u dst %pI4:%u", dissector.ip_protocol,
-        &dissector.src_ip.in6_u.u6_addr32[3], bpf_ntohs(dissector.src_port),
-        &dissector.dst_ip.in6_u.u6_addr32[3], bpf_ntohs(dissector.dst_port));
-    if (dissector.nat) {
-      log_debug("NAT flow, original IP %pI4",
-                &dissector.nat_src_ip.in6_u.u6_addr32[3]);
+  if (DEBUG) {
+    if (IN6_IS_ADDR_V4MAPPED(&dissector.src_ip)) {
+      log_debug("L3 flow ip protocol %u src %pI4:%u dst %pI4:%u",
+                dissector.ip_protocol, &dissector.src_ip.in6_u.u6_addr32[3],
+                bpf_ntohs(dissector.src_port),
+                &dissector.dst_ip.in6_u.u6_addr32[3],
+                bpf_ntohs(dissector.dst_port));
+      if (dissector.nat) {
+        log_debug("NAT flow, original IP %pI4",
+                  &dissector.nat_src_ip.in6_u.u6_addr32[3]);
+      }
+    } else {
+      log_debug("L3 flow ip protocol %u src %pI6:%u dst %pI6:%u",
+                dissector.ip_protocol, &dissector.src_ip,
+                bpf_ntohs(dissector.src_port), &dissector.dst_ip,
+                bpf_ntohs(dissector.dst_port));
     }
-  } else {
-    log_debug("L3 flow ip protocol %u src %pI6:%u dst %pI6:%u",
-              dissector.ip_protocol, &dissector.src_ip,
-              bpf_ntohs(dissector.src_port), &dissector.dst_ip,
-              bpf_ntohs(dissector.dst_port));
   }
 
   struct ip_hash_key lookup_key;
@@ -112,23 +117,27 @@ int xdp_prog(struct xdp_md *ctx) {
     tc_handle = ip_info->tc_handle;
     cpu = ip_info->cpu;
 
-    __u16 tc_major = TC_H_MAJ(tc_handle) >> 16;
-    __u16 tc_minor = TC_H_MIN(tc_handle);
-    if (IN6_IS_ADDR_V4MAPPED(&lookup_key.address)) {
-      log_debug("IPv4 %pI4 is mapped to TC handle 0x%x:0x%x and CPU %u.",
-                &lookup_key.address.in6_u.u6_addr32[3], tc_major, tc_minor,
-                cpu);
-    } else {
-      log_debug("IPv6 %pI6 is mapped to TC handle 0x%x:0x%x and CPU %u.",
-                &lookup_key.address, tc_major, tc_minor, cpu);
+    if (DEBUG) {
+      __u16 tc_major = TC_H_MAJ(tc_handle) >> 16;
+      __u16 tc_minor = TC_H_MIN(tc_handle);
+      if (IN6_IS_ADDR_V4MAPPED(&lookup_key.address)) {
+        log_debug("IPv4 %pI4 is mapped to TC handle 0x%x:0x%x and CPU %u.",
+                  &lookup_key.address.in6_u.u6_addr32[3], tc_major, tc_minor,
+                  cpu);
+      } else {
+        log_debug("IPv6 %pI6 is mapped to TC handle 0x%x:0x%x and CPU %u.",
+                  &lookup_key.address, tc_major, tc_minor, cpu);
+      }
     }
   } else {
-    if (IN6_IS_ADDR_V4MAPPED(&lookup_key.address)) {
-      log_debug("IPv4 %pI4 is not mapped to a TC handle and CPU.",
-                &lookup_key.address.in6_u.u6_addr32[3]);
-    } else {
-      log_debug("IPv6 %pI6 is not mapped to a TC handle and CPU.",
-                &lookup_key.address);
+    if (DEBUG) {
+      if (IN6_IS_ADDR_V4MAPPED(&lookup_key.address)) {
+        log_debug("IPv4 %pI4 is not mapped to a TC handle and CPU.",
+                  &lookup_key.address.in6_u.u6_addr32[3]);
+      } else {
+        log_debug("IPv6 %pI6 is not mapped to a TC handle and CPU.",
+                  &lookup_key.address);
+      }
     }
   }
 
@@ -201,10 +210,12 @@ int tc_prog(struct __sk_buff *skb) {
     return TC_ACT_OK;
   }
 
-  if (direction == DIRECTION_INTERNET) {
-    log_debug("Interface direction for ifindex %u is INTERNET.", ifindex);
-  } else if (direction == DIRECTION_CLIENT) {
-    log_debug("Interface direction for ifindex %u is CLIENT.", ifindex);
+  if (DEBUG) {
+    if (direction == DIRECTION_INTERNET) {
+      log_debug("Interface direction for ifindex %u is INTERNET.", ifindex);
+    } else if (direction == DIRECTION_CLIENT) {
+      log_debug("Interface direction for ifindex %u is CLIENT.", ifindex);
+    }
   }
 
   __u32 cpu = bpf_get_smp_processor_id();
@@ -240,70 +251,82 @@ int tc_prog(struct __sk_buff *skb) {
     return TC_ACT_OK;
   }
 
-  if (IN6_IS_ADDR_V4MAPPED(&dissector.src_ip)) {
-    log_debug(
-        "L3 flow ip protocol %u src %pI4:%u dst %pI4:%u", dissector.ip_protocol,
-        &dissector.src_ip.in6_u.u6_addr32[3], bpf_ntohs(dissector.src_port),
-        &dissector.dst_ip.in6_u.u6_addr32[3], bpf_ntohs(dissector.dst_port));
-    if (dissector.nat) {
-      log_debug("NAT flow, original IP %pI4",
-                &dissector.nat_src_ip.in6_u.u6_addr32[3]);
+  if (DEBUG) {
+    if (IN6_IS_ADDR_V4MAPPED(&dissector.src_ip)) {
+      log_debug("L3 flow ip protocol %u src %pI4:%u dst %pI4:%u",
+                dissector.ip_protocol, &dissector.src_ip.in6_u.u6_addr32[3],
+                bpf_ntohs(dissector.src_port),
+                &dissector.dst_ip.in6_u.u6_addr32[3],
+                bpf_ntohs(dissector.dst_port));
+      if (dissector.nat) {
+        log_debug("NAT flow, original IP %pI4",
+                  &dissector.nat_src_ip.in6_u.u6_addr32[3]);
+      }
+    } else {
+      log_debug("L3 flow ip protocol %u src %pI6:%u dst %pI6:%u",
+                dissector.ip_protocol, &dissector.src_ip,
+                bpf_ntohs(dissector.src_port), &dissector.dst_ip,
+                bpf_ntohs(dissector.dst_port));
     }
-  } else {
-    log_debug("L3 flow ip protocol %u src %pI6:%u dst %pI6:%u",
-              dissector.ip_protocol, &dissector.src_ip,
-              bpf_ntohs(dissector.src_port), &dissector.dst_ip,
-              bpf_ntohs(dissector.dst_port));
   }
 
   struct ip_hash_key lookup_key;
   struct ip_hash_info *ip_info = lookup_ip(direction, &lookup_key, &dissector);
 
   if (ip_info) {
-    if (ip_info->cpu != cpu) {
-      if (IN6_IS_ADDR_V4MAPPED(&lookup_key.address)) {
-        log_debug(
-            "IPv4 %pI4 has arrived on CPU %u when we expected it on CPU %u.",
-            &lookup_key.address.in6_u.u6_addr32[3], cpu, ip_info->cpu);
-      } else {
-        log_debug(
-            "IPv6 %pI6 has arrived on CPU %u when we expected it on CPU %u.",
-            &lookup_key.address, cpu, ip_info->cpu);
+    if (DEBUG) {
+      if (ip_info->cpu != cpu) {
+        if (IN6_IS_ADDR_V4MAPPED(&lookup_key.address)) {
+          log_debug(
+              "IPv4 %pI4 has arrived on CPU %u when we expected it on CPU %u.",
+              &lookup_key.address.in6_u.u6_addr32[3], cpu, ip_info->cpu);
+        } else {
+          log_debug(
+              "IPv6 %pI6 has arrived on CPU %u when we expected it on CPU %u.",
+              &lookup_key.address, cpu, ip_info->cpu);
+        }
       }
     }
 
     if (ip_info->tc_handle != 0) {
       __u16 ip_tc_major = TC_H_MAJ(ip_info->tc_handle) >> 16;
-      __u16 ip_tc_minor = TC_H_MIN(ip_info->tc_handle);
-      if (ip_tc_major != txq_cfg->tc_major) {
-        if (IN6_IS_ADDR_V4MAPPED(&lookup_key.address)) {
-          log_debug("IPv4 %pI4 is mapped to TC major 0x%x but CPU %u is "
-                    "mapped to TC major 0x%x.",
-                    &lookup_key.address.in6_u.u6_addr32[3], ip_tc_major, cpu,
-                    txq_cfg->tc_major, cpu);
-        } else {
-          log_debug("IPv6 %pI6 is mapped to TC major 0x%x but CPU %u is "
-                    "mapped to TC major 0x%x.",
-                    &lookup_key.address, ip_tc_major, cpu, txq_cfg->tc_major);
+      if (ip_tc_major == txq_cfg->tc_major) {
+        if (DEBUG) {
+          __u16 ip_tc_minor = TC_H_MIN(ip_info->tc_handle);
+          if (IN6_IS_ADDR_V4MAPPED(&lookup_key.address)) {
+            log_debug("IPv4 %pI4 setting TC handle to 0x%x:0x%x.",
+                      &lookup_key.address.in6_u.u6_addr32[3], ip_tc_major,
+                      ip_tc_minor);
+          } else {
+            log_debug("IPv6 %pI6 setting TC handle to 0x%x:0x%x.",
+                      &lookup_key.address, ip_tc_major, ip_tc_minor);
+          }
         }
-      } else {
-        if (IN6_IS_ADDR_V4MAPPED(&lookup_key.address)) {
-          log_debug("IPv4 %pI4 setting TC handle to 0x%x:0x%x.",
-                    &lookup_key.address.in6_u.u6_addr32[3], ip_tc_major,
-                    ip_tc_minor);
-        } else {
-          log_debug("IPv6 %pI6 setting TC handle to 0x%x:0x%x.",
-                    &lookup_key.address, ip_tc_major, ip_tc_minor);
-        }
+
         skb->priority = ip_info->tc_handle;
+      } else {
+        if (DEBUG) {
+          if (IN6_IS_ADDR_V4MAPPED(&lookup_key.address)) {
+            log_debug("IPv4 %pI4 is mapped to TC major 0x%x but CPU %u is "
+                      "mapped to TC major 0x%x.",
+                      &lookup_key.address.in6_u.u6_addr32[3], ip_tc_major, cpu,
+                      txq_cfg->tc_major, cpu);
+          } else {
+            log_debug("IPv6 %pI6 is mapped to TC major 0x%x but CPU %u is "
+                      "mapped to TC major 0x%x.",
+                      &lookup_key.address, ip_tc_major, cpu, txq_cfg->tc_major);
+          }
+        }
       }
     } else {
-      if (IN6_IS_ADDR_V4MAPPED(&lookup_key.address)) {
-        log_debug("IPv4 %pI4 is not mapped to a TC handle.",
-                  &lookup_key.address.in6_u.u6_addr32[3]);
-      } else {
-        log_debug("IPv6 %pI6 is not mapped to a TC handle.",
-                  &lookup_key.address);
+      if (DEBUG) {
+        if (IN6_IS_ADDR_V4MAPPED(&lookup_key.address)) {
+          log_debug("IPv4 %pI4 is not mapped to a TC handle.",
+                    &lookup_key.address.in6_u.u6_addr32[3]);
+        } else {
+          log_debug("IPv6 %pI6 is not mapped to a TC handle.",
+                    &lookup_key.address);
+        }
       }
     }
   }
