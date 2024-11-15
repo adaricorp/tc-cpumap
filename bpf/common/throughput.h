@@ -44,8 +44,8 @@ struct {
 static __always_inline void track_traffic(enum traffic_map map, int direction,
                                           struct in6_addr *key, __u32 size,
                                           __u32 tc_handle) {
-  void *map_fd =
-      (map == TRAFFIC_MAP_LOCAL) ? &map_traffic_local : &map_traffic_remote;
+  void *map_fd = (map == TRAFFIC_MAP_LOCAL) ? (void *)&map_traffic_local
+                                            : (void *)&map_traffic_remote;
 
   // Count the bits. It's per-CPU, so we can't be interrupted - no sync required
   struct host_counter *counter =
