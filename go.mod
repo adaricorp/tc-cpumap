@@ -6,7 +6,7 @@ require (
 	github.com/cilium/ebpf v0.16.0
 	github.com/danjacques/gofslock v0.0.0-20240212154529-d899e02bfe22
 	github.com/florianl/go-tc v0.4.4
-	github.com/jedib0t/go-pretty/v6 v6.6.1
+	github.com/jedib0t/go-pretty/v6 v6.6.2
 	github.com/mdlayher/netlink v1.7.2
 	github.com/mitchellh/go-ps v1.0.0
 	github.com/peterbourgon/ff/v4 v4.0.0-alpha.4
