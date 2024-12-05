@@ -16,7 +16,7 @@ require (
 	github.com/prometheus/exporter-toolkit v0.13.1
 	github.com/safchain/ethtool v0.5.9
 	golang.org/x/exp v0.0.0-20240318143956-a85f2c67cd81
-	golang.org/x/sys v0.27.0
+	golang.org/x/sys v0.28.0
 	gopkg.in/yaml.v2 v2.4.0
 )
 
@@ -36,8 +36,8 @@ require (
 	github.com/prometheus/client_model v0.6.1 // indirect
 	github.com/prometheus/procfs v0.15.1 // indirect
 	github.com/rivo/uniseg v0.4.7 // indirect
-	golang.org/x/crypto v0.29.0 // indirect
-	golang.org/x/net v0.31.0 // indirect
+	golang.org/x/crypto v0.30.0 // indirect
+	golang.org/x/net v0.32.0 // indirect
 	golang.org/x/oauth2 v0.24.0 // indirect
 	golang.org/x/sync v0.10.0 // indirect
 	golang.org/x/text v0.21.0 // indirect
