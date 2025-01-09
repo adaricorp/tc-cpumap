@@ -338,6 +338,49 @@ func cleanup(
 	}
 }
 
+// Unpin BPF maps with a signature that doesn't match with the maps we will load
+func unpinIncompatibleMaps(maps map[string]*ebpf.MapSpec, opts ebpf.MapOptions) error {
+	for _, bpfMap := range maps {
+		if bpfMap.Pinning != ebpf.PinByName {
+			continue
+		}
+
+		if _, err := ebpf.NewMapWithOptions(bpfMap, opts); errors.Is(
+			err,
+			ebpf.ErrMapIncompatible,
+		) {
+			oldMap, err := ebpf.LoadPinnedMap(
+				path.Join(bpf.MapPinPath, bpfMap.Name),
+				&opts.LoadPinOptions)
+			if err != nil {
+				return errors.Wrap(err, "Loading pinned BPF map failed")
+			}
+
+			defer func() {
+				if err := oldMap.Close(); err != nil {
+					slog.Error(
+						"Failed to close pinned BPF map",
+						"map",
+						bpfMap.Name,
+						"error",
+						err.Error(),
+					)
+				}
+			}()
+
+			if err = oldMap.Unpin(); err != nil {
+				return errors.Wrapf(
+					err,
+					"Failed to unpin BPF map: %s",
+					bpfMap.Name,
+				)
+			}
+		}
+	}
+
+	return nil
+}
+
 func loadBpf() (bpf.BpfObjects, error) {
 	bpfSpec, err := bpf.LoadBpf()
 	if err != nil {
@@ -397,6 +440,10 @@ func loadBpf() (bpf.BpfObjects, error) {
 	}
 
 	objs := bpf.BpfObjects{}
+
+	if err := unpinIncompatibleMaps(bpfSpec.Maps, bpfMapOpts); err != nil {
+		return bpf.BpfObjects{}, errors.Wrap(err, "Unpinning incompatible BPF maps failed")
+	}
 
 	if err := bpfSpec.LoadAndAssign(&objs, &ebpf.CollectionOptions{
 		Programs: bpfProgOpts,
