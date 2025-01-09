@@ -18,7 +18,8 @@ const (
 )
 
 var (
-	trafficLabels = []string{"ip", "tc_handle", "tc_handle_name"}
+	ipTrafficLabels       = []string{"ip", "tc_handle", "tc_handle_name"}
+	tcHandleTrafficLabels = []string{"tc_handle", "tc_handle_name"}
 
 	up = prometheus.NewDesc(
 		prometheus.BuildFQName(namespace, "", "up"),
@@ -27,53 +28,78 @@ var (
 		nil,
 	)
 
-	trafficLocalRxBytes = prometheus.NewDesc(
-		prometheus.BuildFQName(namespace, "traffic_local", "rx_bytes_total"),
+	ipTrafficLocalRxBytes = prometheus.NewDesc(
+		prometheus.BuildFQName(namespace, "ip_traffic_local", "rx_bytes_total"),
 		"Bytes received from local network hosts.",
-		trafficLabels,
+		ipTrafficLabels,
 		nil,
 	)
-	trafficLocalRxPackets = prometheus.NewDesc(
-		prometheus.BuildFQName(namespace, "traffic_local", "rx_packets_total"),
+	ipTrafficLocalRxPackets = prometheus.NewDesc(
+		prometheus.BuildFQName(namespace, "ip_traffic_local", "rx_packets_total"),
 		"Packets received from local network hosts.",
-		trafficLabels,
+		ipTrafficLabels,
 		nil,
 	)
-	trafficLocalTxBytes = prometheus.NewDesc(
-		prometheus.BuildFQName(namespace, "traffic_local", "tx_bytes_total"),
+	ipTrafficLocalTxBytes = prometheus.NewDesc(
+		prometheus.BuildFQName(namespace, "ip_traffic_local", "tx_bytes_total"),
 		"Bytes sent to local network hosts.",
-		trafficLabels,
+		ipTrafficLabels,
 		nil,
 	)
-	trafficLocalTxPackets = prometheus.NewDesc(
-		prometheus.BuildFQName(namespace, "traffic_local", "tx_packets_total"),
+	ipTrafficLocalTxPackets = prometheus.NewDesc(
+		prometheus.BuildFQName(namespace, "ip_traffic_local", "tx_packets_total"),
 		"Packets sent from local network hosts.",
-		trafficLabels,
+		ipTrafficLabels,
 		nil,
 	)
 
-	trafficRemoteRxBytes = prometheus.NewDesc(
-		prometheus.BuildFQName(namespace, "traffic_remote", "rx_bytes_total"),
+	tcHandleTrafficLocalRxBytes = prometheus.NewDesc(
+		prometheus.BuildFQName(namespace, "tc_handle_traffic_local", "rx_bytes_total"),
+		"Bytes received from local network hosts.",
+		tcHandleTrafficLabels,
+		nil,
+	)
+	tcHandleTrafficLocalRxPackets = prometheus.NewDesc(
+		prometheus.BuildFQName(namespace, "tc_handle_traffic_local", "rx_packets_total"),
+		"Packets received from local network hosts.",
+		tcHandleTrafficLabels,
+		nil,
+	)
+	tcHandleTrafficLocalTxBytes = prometheus.NewDesc(
+		prometheus.BuildFQName(namespace, "tc_handle_traffic_local", "tx_bytes_total"),
+		"Bytes sent to local network hosts.",
+		tcHandleTrafficLabels,
+		nil,
+	)
+	tcHandleTrafficLocalTxPackets = prometheus.NewDesc(
+		prometheus.BuildFQName(namespace, "tc_handle_traffic_local", "tx_packets_total"),
+		"Packets sent from local network hosts.",
+		tcHandleTrafficLabels,
+		nil,
+	)
+
+	ipTrafficRemoteRxBytes = prometheus.NewDesc(
+		prometheus.BuildFQName(namespace, "ip_traffic_remote", "rx_bytes_total"),
 		"Bytes received from remote network hosts.",
-		trafficLabels,
+		ipTrafficLabels,
 		nil,
 	)
-	trafficRemoteRxPackets = prometheus.NewDesc(
-		prometheus.BuildFQName(namespace, "traffic_remote", "rx_packets_total"),
+	ipTrafficRemoteRxPackets = prometheus.NewDesc(
+		prometheus.BuildFQName(namespace, "ip_traffic_remote", "rx_packets_total"),
 		"Packets received from remote network hosts.",
-		trafficLabels,
+		ipTrafficLabels,
 		nil,
 	)
-	trafficRemoteTxBytes = prometheus.NewDesc(
-		prometheus.BuildFQName(namespace, "traffic_remote", "tx_bytes_total"),
+	ipTrafficRemoteTxBytes = prometheus.NewDesc(
+		prometheus.BuildFQName(namespace, "ip_traffic_remote", "tx_bytes_total"),
 		"Bytes sent to remote network hosts.",
-		trafficLabels,
+		ipTrafficLabels,
 		nil,
 	)
-	trafficRemoteTxPackets = prometheus.NewDesc(
-		prometheus.BuildFQName(namespace, "traffic_remote", "tx_packets_total"),
+	ipTrafficRemoteTxPackets = prometheus.NewDesc(
+		prometheus.BuildFQName(namespace, "ip_traffic_remote", "tx_packets_total"),
 		"Packets sent from remote network hosts.",
-		trafficLabels,
+		ipTrafficLabels,
 		nil,
 	)
 )
@@ -84,43 +110,55 @@ type tcCpumapCollector struct {
 
 	up *prometheus.Desc
 
-	trafficLocalRxBytes    *prometheus.Desc
-	trafficLocalRxPackets  *prometheus.Desc
-	trafficLocalTxBytes    *prometheus.Desc
-	trafficLocalTxPackets  *prometheus.Desc
-	trafficRemoteRxBytes   *prometheus.Desc
-	trafficRemoteRxPackets *prometheus.Desc
-	trafficRemoteTxBytes   *prometheus.Desc
-	trafficRemoteTxPackets *prometheus.Desc
+	ipTrafficLocalRxBytes         *prometheus.Desc
+	ipTrafficLocalRxPackets       *prometheus.Desc
+	ipTrafficLocalTxBytes         *prometheus.Desc
+	ipTrafficLocalTxPackets       *prometheus.Desc
+	tcHandleTrafficLocalRxBytes   *prometheus.Desc
+	tcHandleTrafficLocalRxPackets *prometheus.Desc
+	tcHandleTrafficLocalTxBytes   *prometheus.Desc
+	tcHandleTrafficLocalTxPackets *prometheus.Desc
+	ipTrafficRemoteRxBytes        *prometheus.Desc
+	ipTrafficRemoteRxPackets      *prometheus.Desc
+	ipTrafficRemoteTxBytes        *prometheus.Desc
+	ipTrafficRemoteTxPackets      *prometheus.Desc
 }
 
 func newTcCpumapCollector(logger *slog.Logger, tcHandleNames tc.TcHandleNames) *tcCpumapCollector {
 	return &tcCpumapCollector{
-		logger:                 logger,
-		tcHandleNames:          tcHandleNames,
-		up:                     up,
-		trafficLocalRxBytes:    trafficLocalRxBytes,
-		trafficLocalRxPackets:  trafficLocalRxPackets,
-		trafficLocalTxBytes:    trafficLocalTxBytes,
-		trafficLocalTxPackets:  trafficLocalTxPackets,
-		trafficRemoteRxBytes:   trafficRemoteRxBytes,
-		trafficRemoteRxPackets: trafficRemoteRxPackets,
-		trafficRemoteTxBytes:   trafficRemoteTxBytes,
-		trafficRemoteTxPackets: trafficRemoteTxPackets,
+		logger:                        logger,
+		tcHandleNames:                 tcHandleNames,
+		up:                            up,
+		ipTrafficLocalRxBytes:         ipTrafficLocalRxBytes,
+		ipTrafficLocalRxPackets:       ipTrafficLocalRxPackets,
+		ipTrafficLocalTxBytes:         ipTrafficLocalTxBytes,
+		ipTrafficLocalTxPackets:       ipTrafficLocalTxPackets,
+		tcHandleTrafficLocalRxBytes:   tcHandleTrafficLocalRxBytes,
+		tcHandleTrafficLocalRxPackets: tcHandleTrafficLocalRxPackets,
+		tcHandleTrafficLocalTxBytes:   tcHandleTrafficLocalTxBytes,
+		tcHandleTrafficLocalTxPackets: tcHandleTrafficLocalTxPackets,
+		ipTrafficRemoteRxBytes:        ipTrafficRemoteRxBytes,
+		ipTrafficRemoteRxPackets:      ipTrafficRemoteRxPackets,
+		ipTrafficRemoteTxBytes:        ipTrafficRemoteTxBytes,
+		ipTrafficRemoteTxPackets:      ipTrafficRemoteTxPackets,
 	}
 }
 
 func (collector *tcCpumapCollector) Describe(ch chan<- *prometheus.Desc) {
 	ch <- collector.up
 
-	ch <- collector.trafficLocalRxBytes
-	ch <- collector.trafficLocalRxPackets
-	ch <- collector.trafficLocalTxBytes
-	ch <- collector.trafficLocalTxPackets
-	ch <- collector.trafficRemoteRxBytes
-	ch <- collector.trafficRemoteRxPackets
-	ch <- collector.trafficRemoteTxBytes
-	ch <- collector.trafficRemoteTxPackets
+	ch <- collector.ipTrafficLocalRxBytes
+	ch <- collector.ipTrafficLocalRxPackets
+	ch <- collector.ipTrafficLocalTxBytes
+	ch <- collector.ipTrafficLocalTxPackets
+	ch <- collector.tcHandleTrafficLocalRxBytes
+	ch <- collector.tcHandleTrafficLocalRxPackets
+	ch <- collector.tcHandleTrafficLocalTxBytes
+	ch <- collector.tcHandleTrafficLocalTxPackets
+	ch <- collector.ipTrafficRemoteRxBytes
+	ch <- collector.ipTrafficRemoteRxPackets
+	ch <- collector.ipTrafficRemoteTxBytes
+	ch <- collector.ipTrafficRemoteTxPackets
 }
 
 func (collector *tcCpumapCollector) Collect(ch chan<- prometheus.Metric) {
@@ -153,6 +191,8 @@ func (collector *tcCpumapCollector) collectBpfMapMetrics(ch chan<- prometheus.Me
 			vals []bpf.BpfHostCounter
 		)
 
+		handleAggData := map[uint32]bpf.BpfHostCounter{}
+
 		iter := m.Iterate()
 		for iter.Next(&key, &vals) {
 			ip := netip.AddrFrom16(key.In6U.U6Addr8)
@@ -174,6 +214,14 @@ func (collector *tcCpumapCollector) collectBpfMapMetrics(ch chan<- prometheus.Me
 				aggData.LastSeen = val.LastSeen
 			}
 
+			// Aggregate data by TC handle
+			d := handleAggData[aggData.TcHandle]
+			d.TxBytes += aggData.TxBytes
+			d.TxPackets += aggData.TxPackets
+			d.RxBytes += aggData.RxBytes
+			d.RxPackets += aggData.RxPackets
+			handleAggData[aggData.TcHandle] = d
+
 			tcHandleString := tc.TcHandleString(aggData.TcHandle)
 			tcHandleName, exists := collector.tcHandleNames[tcHandleString]
 			if !exists {
@@ -183,7 +231,7 @@ func (collector *tcCpumapCollector) collectBpfMapMetrics(ch chan<- prometheus.Me
 			switch bpfMap {
 			case "map_traffic_local":
 				ch <- prometheus.MustNewConstMetric(
-					collector.trafficLocalRxBytes,
+					collector.ipTrafficLocalRxBytes,
 					prometheus.CounterValue,
 					float64(aggData.RxBytes),
 					ip.Unmap().String(),
@@ -191,7 +239,7 @@ func (collector *tcCpumapCollector) collectBpfMapMetrics(ch chan<- prometheus.Me
 					tcHandleName,
 				)
 				ch <- prometheus.MustNewConstMetric(
-					collector.trafficLocalRxPackets,
+					collector.ipTrafficLocalRxPackets,
 					prometheus.CounterValue,
 					float64(aggData.RxPackets),
 					ip.Unmap().String(),
@@ -199,7 +247,7 @@ func (collector *tcCpumapCollector) collectBpfMapMetrics(ch chan<- prometheus.Me
 					tcHandleName,
 				)
 				ch <- prometheus.MustNewConstMetric(
-					collector.trafficLocalTxBytes,
+					collector.ipTrafficLocalTxBytes,
 					prometheus.CounterValue,
 					float64(aggData.TxBytes),
 					ip.Unmap().String(),
@@ -207,7 +255,7 @@ func (collector *tcCpumapCollector) collectBpfMapMetrics(ch chan<- prometheus.Me
 					tcHandleName,
 				)
 				ch <- prometheus.MustNewConstMetric(
-					collector.trafficLocalTxPackets,
+					collector.ipTrafficLocalTxPackets,
 					prometheus.CounterValue,
 					float64(aggData.TxPackets),
 					ip.Unmap().String(),
@@ -216,7 +264,7 @@ func (collector *tcCpumapCollector) collectBpfMapMetrics(ch chan<- prometheus.Me
 				)
 			case "map_traffic_remote":
 				ch <- prometheus.MustNewConstMetric(
-					collector.trafficRemoteRxBytes,
+					collector.ipTrafficRemoteRxBytes,
 					prometheus.CounterValue,
 					float64(aggData.RxBytes),
 					ip.Unmap().String(),
@@ -224,7 +272,7 @@ func (collector *tcCpumapCollector) collectBpfMapMetrics(ch chan<- prometheus.Me
 					tcHandleName,
 				)
 				ch <- prometheus.MustNewConstMetric(
-					collector.trafficRemoteRxPackets,
+					collector.ipTrafficRemoteRxPackets,
 					prometheus.CounterValue,
 					float64(aggData.RxPackets),
 					ip.Unmap().String(),
@@ -232,7 +280,7 @@ func (collector *tcCpumapCollector) collectBpfMapMetrics(ch chan<- prometheus.Me
 					tcHandleName,
 				)
 				ch <- prometheus.MustNewConstMetric(
-					collector.trafficRemoteTxBytes,
+					collector.ipTrafficRemoteTxBytes,
 					prometheus.CounterValue,
 					float64(aggData.TxBytes),
 					ip.Unmap().String(),
@@ -240,7 +288,7 @@ func (collector *tcCpumapCollector) collectBpfMapMetrics(ch chan<- prometheus.Me
 					tcHandleName,
 				)
 				ch <- prometheus.MustNewConstMetric(
-					collector.trafficRemoteTxPackets,
+					collector.ipTrafficRemoteTxPackets,
 					prometheus.CounterValue,
 					float64(aggData.TxPackets),
 					ip.Unmap().String(),
@@ -256,6 +304,45 @@ func (collector *tcCpumapCollector) collectBpfMapMetrics(ch chan<- prometheus.Me
 				"map", mapPath,
 				"error", iter.Err(),
 			)
+		}
+
+		if bpfMap == "map_traffic_local" {
+			for handle, aggData := range handleAggData {
+				tcHandleString := tc.TcHandleString(handle)
+				tcHandleName, exists := collector.tcHandleNames[tcHandleString]
+				if !exists {
+					tcHandleName = ""
+				}
+
+				ch <- prometheus.MustNewConstMetric(
+					collector.tcHandleTrafficLocalRxBytes,
+					prometheus.CounterValue,
+					float64(aggData.RxBytes),
+					tcHandleString,
+					tcHandleName,
+				)
+				ch <- prometheus.MustNewConstMetric(
+					collector.tcHandleTrafficLocalRxPackets,
+					prometheus.CounterValue,
+					float64(aggData.RxPackets),
+					tcHandleString,
+					tcHandleName,
+				)
+				ch <- prometheus.MustNewConstMetric(
+					collector.tcHandleTrafficLocalTxBytes,
+					prometheus.CounterValue,
+					float64(aggData.TxBytes),
+					tcHandleString,
+					tcHandleName,
+				)
+				ch <- prometheus.MustNewConstMetric(
+					collector.tcHandleTrafficLocalTxPackets,
+					prometheus.CounterValue,
+					float64(aggData.TxPackets),
+					tcHandleString,
+					tcHandleName,
+				)
+			}
 		}
 	}
 }
