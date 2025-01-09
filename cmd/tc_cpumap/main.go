@@ -10,6 +10,7 @@ import (
 	"path/filepath"
 	"runtime"
 	"slices"
+	"strconv"
 	"strings"
 	"syscall"
 
@@ -128,7 +129,6 @@ func init() {
 			)
 			printUsage(fs)
 		}
-
 	}
 
 	for _, ifaceName := range *clientIfaceNames {
@@ -145,14 +145,12 @@ func init() {
 			)
 			printUsage(fs)
 		}
-
 	}
 
 	if slices.Contains(*rxCpus, "all") {
 		*rxCpus = []string{}
-		for c := 0; c < runtime.NumCPU(); c++ {
-			*rxCpus = append(*rxCpus, fmt.Sprintf("%d", c))
-
+		for c := range runtime.NumCPU() {
+			*rxCpus = append(*rxCpus, strconv.Itoa(c))
 		}
 	}
 
@@ -439,7 +437,6 @@ func attachBpf(objs bpf.BpfObjects) ([]link.Link, error) {
 func getIfaceQueues(ifaceName string, direction string) (map[string]string, error) {
 	if direction != "rx" && direction != "tx" {
 		return map[string]string{}, errors.New("Direction must be rx or tx")
-
 	}
 
 	queuesGlob := path.Join("/sys/class/net", ifaceName, "queues", direction+"-*")
@@ -452,8 +449,10 @@ func getIfaceQueues(ifaceName string, direction string) (map[string]string, erro
 	}
 
 	if len(queueDirs) == 0 {
-		return map[string]string{}, errors.New(
-			fmt.Sprintf("Interface %v has no %v queues", ifaceName, direction),
+		return map[string]string{}, fmt.Errorf(
+			"Interface %v has no %v queues",
+			ifaceName,
+			direction,
 		)
 	}
 
