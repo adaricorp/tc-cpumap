@@ -344,9 +344,7 @@ func loadBpf() (bpf.BpfObjects, error) {
 		return bpf.BpfObjects{}, errors.Wrap(err, "Parsing BPF ELF file failed")
 	}
 
-	if err := bpfSpec.RewriteConstants(map[string]interface{}{
-		"CT_ZONE_ID": uint16(*ctZoneId),
-	}); err != nil {
+	if err := bpfSpec.Variables["CT_ZONE_ID"].Set(uint16(*ctZoneId)); err != nil {
 		slog.Error("Couldn't rewrite CT_ZONE_ID constant", "error", err.Error())
 	}
 
@@ -362,11 +360,7 @@ func loadBpf() (bpf.BpfObjects, error) {
 				}
 				for _, i := range iter.Type.(*btf.Enum).Values {
 					if i.Name == "NF_BPF_CT_OPTS_SZ" {
-						if err := bpfSpec.RewriteConstants(
-							map[string]interface{}{
-								"BPF_CT_OPTS_SIZE": uint32(i.Value),
-							},
-						); err != nil {
+						if err := bpfSpec.Variables["BPF_CT_OPTS_SIZE"].Set(uint32(i.Value)); err != nil {
 							slog.Error(
 								"Couldn't rewrite BPF_CT_OPTS_SIZE constant",
 								"error", err.Error(),
@@ -388,9 +382,7 @@ func loadBpf() (bpf.BpfObjects, error) {
 
 		// Rewrite BPF program to enable per-packet debug logging to
 		// /sys/kernel/debug/tracing/trace_pipe
-		if err := bpfSpec.RewriteConstants(map[string]interface{}{
-			"DEBUG": bool(true),
-		}); err != nil {
+		if err := bpfSpec.Variables["DEBUG"].Set(bool(true)); err != nil {
 			slog.Error("Couldn't rewrite debug constant", "error", err.Error())
 		}
 	}
