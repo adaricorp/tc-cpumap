@@ -15,15 +15,10 @@ import (
 
 	"github.com/adaricorp/tc-cpumap/bpf"
 
-	"golang.org/x/sys/unix"
-
 	"github.com/cilium/ebpf"
 	"github.com/cilium/ebpf/btf"
 	"github.com/cilium/ebpf/link"
 	"github.com/danjacques/gofslock/fslock"
-	"github.com/florianl/go-tc"
-	"github.com/florianl/go-tc/core"
-	"github.com/mdlayher/netlink"
 	"github.com/peterbourgon/ff/v4"
 	"github.com/peterbourgon/ff/v4/ffhelp"
 	"github.com/pkg/errors"
@@ -189,6 +184,7 @@ func init() {
 	slog.SetDefault(logger)
 }
 
+// Attach bpf object to interface with XDP
 func attachXdp(objs bpf.BpfObjects, iface *net.Interface) (link.Link, error) {
 	// Attach the program.
 	l, err := link.AttachXDP(link.XDPOptions{
@@ -204,116 +200,37 @@ func attachXdp(objs bpf.BpfObjects, iface *net.Interface) (link.Link, error) {
 	return l, nil
 }
 
+// Attach bpf object to interface with TCX
 func attachTc(
-	tcnl *tc.Tc,
 	objs bpf.BpfObjects,
 	iface *net.Interface,
-) (tc.Object, error) {
-	// Create a qdisc/clsact object that will be attached to the ingress part
-	// of the networking interface.
-	qdisc := tc.Object{
-		Msg: tc.Msg{
-			Family:  unix.AF_UNSPEC,
-			Ifindex: uint32(iface.Index),
-			Handle:  core.BuildHandle(tc.HandleRoot, 0x0000),
-			Parent:  tc.HandleIngress,
-			Info:    0,
-		},
-		Attribute: tc.Attribute{
-			Kind: "clsact",
-		},
-	}
-
-	// Attach the qdisc/clsact to the networking interface.
-	// This TC clsact may already exist if we didn't cleanly shutdown or some other program
-	// has created a clsact on this interface, if that is the case write an error to stderr,
-	// delete the old clsact and create our own
-	tcSuccess := false
-	for retries := 1; retries <= 2; retries++ {
-		if err := tcnl.Qdisc().Add(&qdisc); err != nil {
-			slog.Error(
-				"Couldn't assign TC clsact",
-				"interface",
-				iface.Name,
-				"error",
-				err.Error(),
-			)
-
-			if err := tcnl.Qdisc().Delete(&qdisc); err != nil {
-				slog.Error(
-					"Couldn't delete TC clsact",
-					"interface",
-					iface.Name,
-					"error",
-					err.Error(),
-				)
-			}
-		} else {
-			tcSuccess = true
-			break
-		}
-	}
-
-	if !tcSuccess {
-		return qdisc, errors.New(
-			fmt.Sprintf("Couldn't create new TC clsact for for %v", iface.Name),
-		)
-	}
-
-	fd := uint32(objs.TcProg.FD())
-	flags := uint32(0x1)
-
-	// Create a tc/filter object that will attach the eBPF program to the qdisc/clsact.
-	filter := tc.Object{
-		Msg: tc.Msg{
-			Family:  unix.AF_UNSPEC,
-			Ifindex: uint32(iface.Index),
-			Handle:  0,
-			Parent:  core.BuildHandle(tc.HandleRoot, tc.HandleMinIngress),
-			Info:    0x300,
-		},
-		Attribute: tc.Attribute{
-			Kind: "bpf",
-			BPF: &tc.Bpf{
-				FD:    &fd,
-				Flags: &flags,
-			},
-		},
-	}
-
-	// Attach the tc/filter object with the eBPF program to the qdisc/clsact.
-	if err := tcnl.Filter().Add(&filter); err != nil {
-		return qdisc, errors.Wrapf(
-			err,
-			"Couldn't attach TC filter for eBPF program to %v",
-			iface.Name,
-		)
+) (link.Link, error) {
+	// Attach the program.
+	l, err := link.AttachTCX(link.TCXOptions{
+		Program:   objs.TcProg,
+		Attach:    ebpf.AttachTCXIngress,
+		Interface: iface.Index,
+	})
+	if err != nil {
+		return nil, err
 	}
 
 	slog.Info("Attached TC eBPF program", "interface", iface.Name, "index", iface.Index)
 
-	return qdisc, nil
+	return l, nil
 }
 
-// Detatch eBPF programs, unload eBPF objects, restore XPS masks and close TC netlink connection
+// Detatch eBPF programs, unload eBPF objects and restore XPS masks
 func cleanup(
 	oldIfaceEthtoolConfig map[string]EthtoolConfig,
 	oldXpsMasks map[string]TxQueueXpsConfig,
 	oldIrqAffinities map[string]string,
 	bpfObjs bpf.BpfObjects,
 	links []link.Link,
-	tcnl *tc.Tc,
-	tcQdiscs []tc.Object,
 ) {
 	for _, l := range links {
 		if err := l.Close(); err != nil {
 			slog.Error("Couldn't detach eBPF program from link", "error", err.Error())
-		}
-	}
-
-	for _, qdisc := range tcQdiscs {
-		if err := tcnl.Qdisc().Delete(&qdisc); err != nil {
-			slog.Error("Couldn't remove TC clsact", "error", err.Error())
 		}
 	}
 
@@ -330,12 +247,6 @@ func cleanup(
 
 	// Restore NIC ethtool settings back to what they were
 	restoreNic(oldIfaceEthtoolConfig)
-
-	if tcnl != nil {
-		if err := tcnl.Close(); err != nil {
-			slog.Error("Couldn't close rtnetlink socket", "error", err.Error())
-		}
-	}
 }
 
 // Unpin BPF maps with a signature that doesn't match with the maps we will load
@@ -453,45 +364,45 @@ func loadBpf() (bpf.BpfObjects, error) {
 		if errors.As(err, &ve) {
 			fmt.Fprintf(os.Stderr, "BPF verifier error: %+v\n", ve)
 		}
+
 		return bpf.BpfObjects{}, errors.Wrap(err, "Loading BPF objects failed")
 	}
 
 	return objs, nil
 }
 
-func attachBpf(tcnl *tc.Tc, objs bpf.BpfObjects) ([]link.Link, []tc.Object, error) {
+func attachBpf(objs bpf.BpfObjects) ([]link.Link, error) {
 	links := []link.Link{}
-	tcQdiscs := []tc.Object{}
 
 	for _, ifaceName := range append(*internetIfaceNames, *clientIfaceNames...) {
 		iface, err := net.InterfaceByName(ifaceName)
 		if err != nil {
-			return links, tcQdiscs, errors.Wrapf(
+			return links, errors.Wrapf(
 				err, "Couldn't find network interface %v", ifaceName,
 			)
 		}
 
 		link, err := attachXdp(objs, iface)
 		if err != nil {
-			return links, tcQdiscs, errors.Wrapf(
+			return links, errors.Wrapf(
 				err, "Couldn't attach XDP eBPF program to interface %v", ifaceName,
 			)
 		}
 		links = append(links, link)
 
-		qdisc, err := attachTc(tcnl, objs, iface)
+		link, err = attachTc(objs, iface)
 		if err != nil {
-			return links, tcQdiscs, errors.Wrapf(
+			return links, errors.Wrapf(
 				err, "Couldn't attach TC eBPF program to interface %v", ifaceName,
 			)
 		}
-		tcQdiscs = append(tcQdiscs, qdisc)
+		links = append(links, link)
 	}
 
 	for _, ifaceName := range *internetIfaceNames {
 		iface, err := net.InterfaceByName(ifaceName)
 		if err != nil {
-			return links, tcQdiscs, errors.Wrapf(
+			return links, errors.Wrapf(
 				err, "Couldn't find network interface %v", ifaceName,
 			)
 		}
@@ -501,14 +412,14 @@ func attachBpf(tcnl *tc.Tc, objs bpf.BpfObjects) ([]link.Link, []tc.Object, erro
 			uint32(bpf.DirectionInternet),
 			ebpf.UpdateAny,
 		); err != nil {
-			return links, tcQdiscs, errors.Wrap(err, "Failed to write to map")
+			return links, errors.Wrap(err, "Failed to write to map")
 		}
 	}
 
 	for _, ifaceName := range *clientIfaceNames {
 		iface, err := net.InterfaceByName(ifaceName)
 		if err != nil {
-			return links, tcQdiscs, errors.Wrapf(
+			return links, errors.Wrapf(
 				err, "Couldn't find network interface %v", ifaceName,
 			)
 		}
@@ -518,11 +429,11 @@ func attachBpf(tcnl *tc.Tc, objs bpf.BpfObjects) ([]link.Link, []tc.Object, erro
 			int32(bpf.DirectionClient),
 			ebpf.UpdateAny,
 		); err != nil {
-			return links, tcQdiscs, errors.Wrap(err, "Failed to write to map")
+			return links, errors.Wrap(err, "Failed to write to map")
 		}
 	}
 
-	return links, tcQdiscs, nil
+	return links, nil
 }
 
 func getIfaceQueues(ifaceName string, direction string) (map[string]string, error) {
@@ -866,12 +777,10 @@ func main() {
 	// Variables used for cleanup
 	var (
 		oldIfaceEthtoolConfig map[string]EthtoolConfig
-		oldXpsMasks                  = map[string]TxQueueXpsConfig{}
-		oldIrqAffinities             = map[string]string{}
-		bpfObjs                      = bpf.BpfObjects{}
-		links                        = []link.Link{}
-		tcQdiscs                     = []tc.Object{}
-		tcnl                  *tc.Tc = nil
+		oldXpsMasks           = map[string]TxQueueXpsConfig{}
+		oldIrqAffinities      = map[string]string{}
+		bpfObjs               = bpf.BpfObjects{}
+		links                 = []link.Link{}
 	)
 
 	slog.Info("Configuring NIC")
@@ -885,8 +794,6 @@ func main() {
 			oldIrqAffinities,
 			bpfObjs,
 			links,
-			tcnl,
-			tcQdiscs,
 		)
 		os.Exit(1)
 	}
@@ -902,8 +809,6 @@ func main() {
 			oldIrqAffinities,
 			bpfObjs,
 			links,
-			tcnl,
-			tcQdiscs,
 		)
 		os.Exit(1)
 	}
@@ -920,8 +825,6 @@ func main() {
 				oldIrqAffinities,
 				bpfObjs,
 				links,
-				tcnl,
-				tcQdiscs,
 			)
 			os.Exit(1)
 		}
@@ -938,45 +841,13 @@ func main() {
 			oldIrqAffinities,
 			bpfObjs,
 			links,
-			tcnl,
-			tcQdiscs,
 		)
 		os.Exit(1)
-	}
-
-	// Open a netlink/tc connection to the Linux kernel. This connection is
-	// used to manage the tc/qdisc and tc/filter to which
-	// the eBPF program will be attached
-	tcnl, err = tc.Open(&tc.Config{})
-	if err != nil {
-		slog.Error("Couldn't open rtnetlink socket", "error", err.Error())
-		cleanup(
-			oldIfaceEthtoolConfig,
-			oldXpsMasks,
-			oldIrqAffinities,
-			bpfObjs,
-			links,
-			tcnl,
-			tcQdiscs,
-		)
-		os.Exit(1)
-	}
-
-	// For enhanced error messages from the kernel, it is recommended to set
-	// option `NETLINK_EXT_ACK`, which is supported since 4.12 kernel.
-	//
-	// If not supported, `unix.ENOPROTOOPT` is returned.
-	if err := tcnl.SetOption(netlink.ExtendedAcknowledge, true); err != nil {
-		slog.Error(
-			"Could not enable netlink ExtendedAcknowledge option",
-			"error",
-			err.Error(),
-		)
 	}
 
 	slog.Info("Attaching eBPF programs to interfaces")
 
-	if links, tcQdiscs, err = attachBpf(tcnl, bpfObjs); err != nil {
+	if links, err = attachBpf(bpfObjs); err != nil {
 		slog.Error("Couldn't attach BPF objects", "error", err.Error())
 		cleanup(
 			oldIfaceEthtoolConfig,
@@ -984,8 +855,6 @@ func main() {
 			oldIrqAffinities,
 			bpfObjs,
 			links,
-			tcnl,
-			tcQdiscs,
 		)
 		os.Exit(1)
 	}
@@ -1002,7 +871,5 @@ func main() {
 		oldIrqAffinities,
 		bpfObjs,
 		links,
-		tcnl,
-		tcQdiscs,
 	)
 }
