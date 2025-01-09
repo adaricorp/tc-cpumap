@@ -25,7 +25,7 @@ This project is largely based on the work of the following projects:
 
  * Minimum of 2 network interfaces (1x WAN and 1x LAN)
  * Network interfaces must have multiple TX and RX queues
- * Linux 5.17+ (Linux 6+ is recommended)
+ * Linux 6.6+
 
 ## Downloading
 
