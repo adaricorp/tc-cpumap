@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/adaricorp/tc-cpumap/bpf"
+	"github.com/adaricorp/tc-cpumap/mac"
 	"github.com/adaricorp/tc-cpumap/tc"
 	"golang.org/x/sys/unix"
 
@@ -28,6 +29,11 @@ var (
 	sortColumn  *int
 	bootTime    time.Time
 )
+
+type hostKey struct {
+	ip  bpf.BpfIn6Addr
+	mac uint64
+}
 
 // Print program usage
 func printUsage(fs ff.Flags) {
@@ -76,6 +82,7 @@ func printMap(mapName string, m *ebpf.Map) error {
 		t.AppendHeader(
 			table.Row{
 				"IP",
+				"MAC",
 				"RX CPU",
 				"Sent",
 				"Sent",
@@ -90,6 +97,7 @@ func printMap(mapName string, m *ebpf.Map) error {
 			table.Row{
 				"",
 				"",
+				"",
 				"Bytes",
 				"Packets",
 				"Bytes",
@@ -102,6 +110,7 @@ func printMap(mapName string, m *ebpf.Map) error {
 		t.AppendHeader(
 			table.Row{
 				"IP",
+				"MAC",
 				"Sent",
 				"Sent",
 				"Received",
@@ -113,6 +122,7 @@ func printMap(mapName string, m *ebpf.Map) error {
 		)
 		t.AppendHeader(
 			table.Row{
+				"",
 				"",
 				"Bytes",
 				"Packets",
@@ -137,6 +147,7 @@ func printMap(mapName string, m *ebpf.Map) error {
 				t.AppendRow(
 					[]interface{}{
 						ip.Unmap(),
+						mac.MacAddress(val.Mac),
 						cpu,
 						val.TxBytes,
 						val.TxPackets,
@@ -149,35 +160,56 @@ func printMap(mapName string, m *ebpf.Map) error {
 				)
 			}
 		} else {
-			aggData := bpf.BpfHostCounter{}
-
 			// Sort by last seen so TcHandle/LastSeen values that
-			// get stored in aggData are the most up to date
+			// are stored in aggData are the most up to date
 			sort.Slice(vals, func(a, b int) bool {
 				return vals[a].LastSeen < vals[b].LastSeen
 			})
 
-			for _, val := range vals {
-				aggData.TxBytes += val.TxBytes
-				aggData.TxPackets += val.TxPackets
-				aggData.RxBytes += val.RxBytes
-				aggData.RxPackets += val.RxPackets
+			hostAggData := map[hostKey]bpf.BpfHostCounter{}
 
-				aggData.TcHandle = val.TcHandle
-				aggData.LastSeen = val.LastSeen
+			for _, val := range vals {
+				host := hostKey{
+					ip:  key,
+					mac: val.Mac,
+				}
+
+				// Aggregate statistics by host
+				if stats, exists := hostAggData[host]; exists {
+					stats.TxBytes += val.TxBytes
+					stats.TxPackets += val.TxPackets
+					stats.RxBytes += val.RxBytes
+					stats.RxPackets += val.RxPackets
+					stats.LastSeen = val.LastSeen
+
+					hostAggData[host] = stats
+				} else {
+					hostAggData[host] = bpf.BpfHostCounter{
+						TxBytes:   val.TxBytes,
+						TxPackets: val.TxPackets,
+						RxBytes:   val.RxBytes,
+						RxPackets: val.RxPackets,
+						TcHandle:  val.TcHandle,
+						Mac:       val.Mac,
+						LastSeen:  val.LastSeen,
+					}
+				}
 			}
 
-			t.AppendRow(
-				[]interface{}{
-					ip.Unmap(),
-					aggData.TxBytes,
-					aggData.TxPackets,
-					aggData.RxBytes,
-					aggData.RxPackets,
-					tc.TcHandleString(aggData.TcHandle),
-					decodeLastSeenTime(aggData.LastSeen),
-				},
-			)
+			for host, stats := range hostAggData {
+				t.AppendRow(
+					[]interface{}{
+						ip.Unmap(),
+						mac.MacAddress(host.mac),
+						stats.TxBytes,
+						stats.TxPackets,
+						stats.RxBytes,
+						stats.RxPackets,
+						tc.TcHandleString(stats.TcHandle),
+						decodeLastSeenTime(stats.LastSeen),
+					},
+				)
+			}
 		}
 	}
 
