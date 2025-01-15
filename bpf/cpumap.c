@@ -13,6 +13,7 @@
 #include "common/debug.h"
 #include "common/direction.h"
 #include "common/dissector.h"
+#include "common/etherdevice.h"
 #include "common/lpm.h"
 #include "common/maps.h"
 #include "common/pkt_cls.h"
@@ -89,6 +90,11 @@ int xdp_prog(struct xdp_md *ctx) {
   }
 
   if (DEBUG) {
+    log_debug("L2 flow eth protocol %x src %llx dst %llx",
+              bpf_ntohs(dissector.ethernet_header->h_proto),
+              ether_addr_to_u64(dissector.ethernet_header->h_source),
+              ether_addr_to_u64(dissector.ethernet_header->h_dest));
+
     if (IN6_IS_ADDR_V4MAPPED(&dissector.src_ip)) {
       log_debug("L3 flow ip protocol %u src %pI4:%u dst %pI4:%u",
                 dissector.ip_protocol, &dissector.src_ip.in6_u.u6_addr32[3],
@@ -141,10 +147,18 @@ int xdp_prog(struct xdp_md *ctx) {
     }
   }
 
+  __u64 local_mac = 0;
+  __u64 remote_mac = 0;
+  if (direction == DIRECTION_INTERNET) {
+    remote_mac = ether_addr_to_u64(dissector.ethernet_header->h_source);
+  } else if (direction == DIRECTION_CLIENT) {
+    local_mac = ether_addr_to_u64(dissector.ethernet_header->h_source);
+  }
+
   // Update the local traffic tracking buffers
   track_traffic(TRAFFIC_MAP_LOCAL, direction, &lookup_key.address,
                 ctx->data_end - ctx->data, // end - data = length
-                tc_handle);
+                tc_handle, local_mac);
 
   struct in6_addr remote_address =
       (direction == DIRECTION_INTERNET) ? dissector.src_ip : dissector.dst_ip;
@@ -153,7 +167,7 @@ int xdp_prog(struct xdp_md *ctx) {
   track_traffic(TRAFFIC_MAP_REMOTE, reverse_direction(direction),
                 &remote_address,
                 ctx->data_end - ctx->data, // end - data = length
-                0);
+                0, remote_mac);
 
   if (tc_handle != 0) {
     // Handle CPU redirection if there is one specified

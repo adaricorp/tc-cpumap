@@ -1,9 +1,9 @@
 #pragma once
 
 /* Interface (ifindex) direction type */
-#define DIRECTION_NONE 0 /* Not configured */
-#define DIRECTION_INTERNET 1
-#define DIRECTION_CLIENT 2
+#define DIRECTION_NONE 0     /* Not configured */
+#define DIRECTION_INTERNET 1 /* From internet */
+#define DIRECTION_CLIENT 2   /* From client */
 
 /* This ifindex limit is an artifical limit that can easily be bumped.
  * The reason for this is allowing to use a faster BPF_MAP_TYPE_ARRAY

@@ -7,6 +7,7 @@ import (
 	"sort"
 
 	"github.com/adaricorp/tc-cpumap/bpf"
+	"github.com/adaricorp/tc-cpumap/mac"
 	"github.com/adaricorp/tc-cpumap/tc"
 	"github.com/cilium/ebpf"
 	"github.com/mitchellh/go-ps"
@@ -18,7 +19,7 @@ const (
 )
 
 var (
-	ipTrafficLabels       = []string{"ip", "tc_handle", "tc_handle_name"}
+	ipTrafficLabels       = []string{"ip", "mac", "tc_handle", "tc_handle_name"}
 	tcHandleTrafficLabels = []string{"tc_handle", "tc_handle_name"}
 
 	up = prometheus.NewDesc(
@@ -103,6 +104,11 @@ var (
 		nil,
 	)
 )
+
+type hostKey struct {
+	ip  bpf.BpfIn6Addr
+	mac uint64
+}
 
 type tcCpumapCollector struct {
 	logger        *slog.Logger
@@ -191,110 +197,141 @@ func (collector *tcCpumapCollector) collectBpfMapMetrics(ch chan<- prometheus.Me
 			vals []bpf.BpfHostCounter
 		)
 
-		handleAggData := map[uint32]bpf.BpfHostCounter{}
+		tcHandleAggData := map[uint32]bpf.BpfHostCounter{}
 
 		iter := m.Iterate()
 		for iter.Next(&key, &vals) {
-			ip := netip.AddrFrom16(key.In6U.U6Addr8)
-			aggData := bpf.BpfHostCounter{}
-
 			// Sort by last seen so TcHandle/LastSeen values that
-			// get stored in aggData are the most up to date
+			// are stored in aggData are the most recent
 			sort.Slice(vals, func(a, b int) bool {
 				return vals[a].LastSeen < vals[b].LastSeen
 			})
 
+			hostAggData := map[hostKey]bpf.BpfHostCounter{}
+
 			for _, val := range vals {
-				aggData.TxBytes += val.TxBytes
-				aggData.TxPackets += val.TxPackets
-				aggData.RxBytes += val.RxBytes
-				aggData.RxPackets += val.RxPackets
+				host := hostKey{
+					ip:  key,
+					mac: val.Mac,
+				}
 
-				aggData.TcHandle = val.TcHandle
-				aggData.LastSeen = val.LastSeen
+				// Aggregate statistics by host
+				if stats, exists := hostAggData[host]; exists {
+					stats.TxBytes += val.TxBytes
+					stats.TxPackets += val.TxPackets
+					stats.RxBytes += val.RxBytes
+					stats.RxPackets += val.RxPackets
+					stats.LastSeen = val.LastSeen
+
+					hostAggData[host] = stats
+				} else {
+					hostAggData[host] = bpf.BpfHostCounter{
+						TxBytes:   val.TxBytes,
+						TxPackets: val.TxPackets,
+						RxBytes:   val.RxBytes,
+						RxPackets: val.RxPackets,
+						TcHandle:  val.TcHandle,
+						Mac:       val.Mac,
+						LastSeen:  val.LastSeen,
+					}
+				}
+
+				// Aggregate data by TC handle
+				stats := tcHandleAggData[val.TcHandle]
+				stats.TxBytes += val.TxBytes
+				stats.TxPackets += val.TxPackets
+				stats.RxBytes += val.RxBytes
+				stats.RxPackets += val.RxPackets
+				tcHandleAggData[val.TcHandle] = stats
 			}
 
-			// Aggregate data by TC handle
-			d := handleAggData[aggData.TcHandle]
-			d.TxBytes += aggData.TxBytes
-			d.TxPackets += aggData.TxPackets
-			d.RxBytes += aggData.RxBytes
-			d.RxPackets += aggData.RxPackets
-			handleAggData[aggData.TcHandle] = d
+			for host, stats := range hostAggData {
+				ip := netip.AddrFrom16(host.ip.In6U.U6Addr8)
+				hwAddr := mac.MacAddress(host.mac)
 
-			tcHandleString := tc.TcHandleString(aggData.TcHandle)
-			tcHandleName, exists := collector.tcHandleNames[tcHandleString]
-			if !exists {
-				tcHandleName = ""
-			}
+				tcHandleString := tc.TcHandleString(stats.TcHandle)
 
-			switch bpfMap {
-			case "map_traffic_local":
-				ch <- prometheus.MustNewConstMetric(
-					collector.ipTrafficLocalRxBytes,
-					prometheus.CounterValue,
-					float64(aggData.RxBytes),
-					ip.Unmap().String(),
-					tcHandleString,
-					tcHandleName,
-				)
-				ch <- prometheus.MustNewConstMetric(
-					collector.ipTrafficLocalRxPackets,
-					prometheus.CounterValue,
-					float64(aggData.RxPackets),
-					ip.Unmap().String(),
-					tcHandleString,
-					tcHandleName,
-				)
-				ch <- prometheus.MustNewConstMetric(
-					collector.ipTrafficLocalTxBytes,
-					prometheus.CounterValue,
-					float64(aggData.TxBytes),
-					ip.Unmap().String(),
-					tcHandleString,
-					tcHandleName,
-				)
-				ch <- prometheus.MustNewConstMetric(
-					collector.ipTrafficLocalTxPackets,
-					prometheus.CounterValue,
-					float64(aggData.TxPackets),
-					ip.Unmap().String(),
-					tcHandleString,
-					tcHandleName,
-				)
-			case "map_traffic_remote":
-				ch <- prometheus.MustNewConstMetric(
-					collector.ipTrafficRemoteRxBytes,
-					prometheus.CounterValue,
-					float64(aggData.RxBytes),
-					ip.Unmap().String(),
-					tcHandleString,
-					tcHandleName,
-				)
-				ch <- prometheus.MustNewConstMetric(
-					collector.ipTrafficRemoteRxPackets,
-					prometheus.CounterValue,
-					float64(aggData.RxPackets),
-					ip.Unmap().String(),
-					tcHandleString,
-					tcHandleName,
-				)
-				ch <- prometheus.MustNewConstMetric(
-					collector.ipTrafficRemoteTxBytes,
-					prometheus.CounterValue,
-					float64(aggData.TxBytes),
-					ip.Unmap().String(),
-					tcHandleString,
-					tcHandleName,
-				)
-				ch <- prometheus.MustNewConstMetric(
-					collector.ipTrafficRemoteTxPackets,
-					prometheus.CounterValue,
-					float64(aggData.TxPackets),
-					ip.Unmap().String(),
-					tcHandleString,
-					tcHandleName,
-				)
+				tcHandleName, exists := collector.tcHandleNames[tcHandleString]
+				if !exists {
+					tcHandleName = ""
+				}
+
+				switch bpfMap {
+				case "map_traffic_local":
+					ch <- prometheus.MustNewConstMetric(
+						collector.ipTrafficLocalRxBytes,
+						prometheus.CounterValue,
+						float64(stats.RxBytes),
+						ip.Unmap().String(),
+						hwAddr.String(),
+						tcHandleString,
+						tcHandleName,
+					)
+					ch <- prometheus.MustNewConstMetric(
+						collector.ipTrafficLocalRxPackets,
+						prometheus.CounterValue,
+						float64(stats.RxPackets),
+						ip.Unmap().String(),
+						hwAddr.String(),
+						tcHandleString,
+						tcHandleName,
+					)
+					ch <- prometheus.MustNewConstMetric(
+						collector.ipTrafficLocalTxBytes,
+						prometheus.CounterValue,
+						float64(stats.TxBytes),
+						ip.Unmap().String(),
+						hwAddr.String(),
+						tcHandleString,
+						tcHandleName,
+					)
+					ch <- prometheus.MustNewConstMetric(
+						collector.ipTrafficLocalTxPackets,
+						prometheus.CounterValue,
+						float64(stats.TxPackets),
+						ip.Unmap().String(),
+						hwAddr.String(),
+						tcHandleString,
+						tcHandleName,
+					)
+				case "map_traffic_remote":
+					ch <- prometheus.MustNewConstMetric(
+						collector.ipTrafficRemoteRxBytes,
+						prometheus.CounterValue,
+						float64(stats.RxBytes),
+						ip.Unmap().String(),
+						hwAddr.String(),
+						tcHandleString,
+						tcHandleName,
+					)
+					ch <- prometheus.MustNewConstMetric(
+						collector.ipTrafficRemoteRxPackets,
+						prometheus.CounterValue,
+						float64(stats.RxPackets),
+						ip.Unmap().String(),
+						hwAddr.String(),
+						tcHandleString,
+						tcHandleName,
+					)
+					ch <- prometheus.MustNewConstMetric(
+						collector.ipTrafficRemoteTxBytes,
+						prometheus.CounterValue,
+						float64(stats.TxBytes),
+						ip.Unmap().String(),
+						hwAddr.String(),
+						tcHandleString,
+						tcHandleName,
+					)
+					ch <- prometheus.MustNewConstMetric(
+						collector.ipTrafficRemoteTxPackets,
+						prometheus.CounterValue,
+						float64(stats.TxPackets),
+						ip.Unmap().String(),
+						hwAddr.String(),
+						tcHandleString,
+						tcHandleName,
+					)
+				}
 			}
 		}
 
@@ -307,8 +344,9 @@ func (collector *tcCpumapCollector) collectBpfMapMetrics(ch chan<- prometheus.Me
 		}
 
 		if bpfMap == "map_traffic_local" {
-			for handle, aggData := range handleAggData {
+			for handle, stats := range tcHandleAggData {
 				tcHandleString := tc.TcHandleString(handle)
+
 				tcHandleName, exists := collector.tcHandleNames[tcHandleString]
 				if !exists {
 					tcHandleName = ""
@@ -317,28 +355,28 @@ func (collector *tcCpumapCollector) collectBpfMapMetrics(ch chan<- prometheus.Me
 				ch <- prometheus.MustNewConstMetric(
 					collector.tcHandleTrafficLocalRxBytes,
 					prometheus.CounterValue,
-					float64(aggData.RxBytes),
+					float64(stats.RxBytes),
 					tcHandleString,
 					tcHandleName,
 				)
 				ch <- prometheus.MustNewConstMetric(
 					collector.tcHandleTrafficLocalRxPackets,
 					prometheus.CounterValue,
-					float64(aggData.RxPackets),
+					float64(stats.RxPackets),
 					tcHandleString,
 					tcHandleName,
 				)
 				ch <- prometheus.MustNewConstMetric(
 					collector.tcHandleTrafficLocalTxBytes,
 					prometheus.CounterValue,
-					float64(aggData.TxBytes),
+					float64(stats.TxBytes),
 					tcHandleString,
 					tcHandleName,
 				)
 				ch <- prometheus.MustNewConstMetric(
 					collector.tcHandleTrafficLocalTxPackets,
 					prometheus.CounterValue,
-					float64(aggData.TxPackets),
+					float64(stats.TxPackets),
 					tcHandleString,
 					tcHandleName,
 				)

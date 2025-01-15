@@ -16,6 +16,7 @@ struct host_counter {
   __u64 rx_packets;
   __u64 tx_packets;
   __u32 tc_handle;
+  __u64 mac;
   __u64 last_seen;
 };
 
@@ -43,7 +44,7 @@ struct {
 
 static __always_inline void track_traffic(enum traffic_map map, int direction,
                                           struct in6_addr *key, __u32 size,
-                                          __u32 tc_handle) {
+                                          __u32 tc_handle, __u64 mac) {
   void *map_fd = (map == TRAFFIC_MAP_LOCAL) ? (void *)&map_traffic_local
                                             : (void *)&map_traffic_remote;
 
@@ -53,6 +54,15 @@ static __always_inline void track_traffic(enum traffic_map map, int direction,
   if (counter) {
     counter->last_seen = bpf_ktime_get_boot_ns();
     counter->tc_handle = tc_handle;
+    if (mac != 0 && mac != counter->mac) {
+      counter->mac = mac;
+
+      // Reset counter stats when mac address changes
+      counter->rx_packets = 0;
+      counter->rx_bytes = 0;
+      counter->tx_packets = 0;
+      counter->tx_bytes = 0;
+    }
     if (direction == DIRECTION_INTERNET) {
       // Receive
       counter->rx_packets += 1;
@@ -65,6 +75,7 @@ static __always_inline void track_traffic(enum traffic_map map, int direction,
   } else {
     struct host_counter new_host = {0};
     new_host.tc_handle = tc_handle;
+    new_host.mac = mac;
     new_host.last_seen = bpf_ktime_get_boot_ns();
     if (direction == DIRECTION_INTERNET) {
       new_host.rx_packets = 1;
