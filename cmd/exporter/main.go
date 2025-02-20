@@ -8,6 +8,7 @@ import (
 	"os"
 	"strings"
 
+	"github.com/IncSW/geoip2"
 	"github.com/adaricorp/tc-cpumap/tc"
 	"github.com/peterbourgon/ff/v4"
 	"github.com/peterbourgon/ff/v4/ffhelp"
@@ -20,6 +21,7 @@ import (
 )
 
 var (
+	asnDBPath     *string
 	listenAddr    *[]string
 	metricsPath   *string
 	webConfigFile *string
@@ -80,6 +82,11 @@ func init() {
 		),
 		promslog.FormatFlagOptions...,
 	)
+	asnDBPath = fs.StringLong(
+		"maxmind.asn-db.path",
+		"",
+		"Path to GeoLite2-ASN.mmdb file (optional)",
+	)
 
 	err := ff.Parse(fs, os.Args[1:])
 
@@ -129,10 +136,19 @@ func main() {
 		}
 	}
 
+	var asnReader *geoip2.ASNReader
+	if *asnDBPath != "" {
+		var err error
+		asnReader, err = geoip2.NewASNReaderFromFile(*asnDBPath)
+		if err != nil {
+			logger.Error("Error opening ASN database", "error", err.Error())
+		}
+	}
+
 	versionCollector := versioncollector.NewCollector("tc_cpumap")
 	prometheus.MustRegister(versionCollector)
 
-	tcCpumapCollector := newTcCpumapCollector(logger, tcHandleNames)
+	tcCpumapCollector := newTcCpumapCollector(logger, tcHandleNames, asnReader)
 	prometheus.MustRegister(tcCpumapCollector)
 
 	http.Handle(*metricsPath, promhttp.Handler())
