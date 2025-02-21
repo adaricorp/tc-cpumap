@@ -31,26 +31,43 @@ struct {
   __uint(pinning, LIBBPF_PIN_BY_NAME);
 } map_traffic_local SEC(".maps");
 
+struct remote_stats_key {
+  struct in6_addr local_ip;
+  struct in6_addr remote_ip;
+};
+
 // Pinned map storing counters per server on remote WAN.
 // its an LRU structure: if it runs out of space,
 // the least recently seen server will be removed.
 struct {
   __uint(type, BPF_MAP_TYPE_LRU_PERCPU_HASH);
-  __type(key, struct in6_addr);
+  __type(key, struct remote_stats_key);
   __type(value, struct host_counter);
   __uint(max_entries, MAX_TRACKED_IPS);
   __uint(pinning, LIBBPF_PIN_BY_NAME);
 } map_traffic_remote SEC(".maps");
 
 static __always_inline void track_traffic(enum traffic_map map, int direction,
-                                          struct in6_addr *key, __u32 size,
+                                          struct in6_addr *key,
+                                          struct in6_addr *local_ip, __u32 size,
                                           __u32 tc_handle, __u64 mac) {
   void *map_fd = (map == TRAFFIC_MAP_LOCAL) ? (void *)&map_traffic_local
                                             : (void *)&map_traffic_remote;
 
+  struct remote_stats_key remote_map_key = {};
+
+  void *map_key;
+  if (map == TRAFFIC_MAP_LOCAL) {
+    map_key = key;
+  } else {
+    remote_map_key.remote_ip = *key;
+    remote_map_key.local_ip = *local_ip;
+    map_key = (void *)&remote_map_key;
+  }
+
   // Count the bits. It's per-CPU, so we can't be interrupted - no sync required
   struct host_counter *counter =
-      (struct host_counter *)bpf_map_lookup_elem(map_fd, key);
+      (struct host_counter *)bpf_map_lookup_elem(map_fd, map_key);
   if (counter) {
     counter->last_seen = bpf_ktime_get_boot_ns();
     counter->tc_handle = tc_handle;
@@ -88,7 +105,7 @@ static __always_inline void track_traffic(enum traffic_map map, int direction,
       new_host.rx_bytes = 0;
       new_host.rx_packets = 0;
     }
-    if (bpf_map_update_elem(map_fd, key, &new_host, BPF_NOEXIST) != 0) {
+    if (bpf_map_update_elem(map_fd, map_key, &new_host, BPF_NOEXIST) != 0) {
       if (DEBUG) {
         if (IN6_IS_ADDR_V4MAPPED(key)) {
           log_debug("Failed to insert flow for IPv4 %pI4",
