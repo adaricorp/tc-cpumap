@@ -9,6 +9,7 @@ import (
 	"path"
 	"slices"
 	"sort"
+	"strings"
 	"time"
 
 	"github.com/IncSW/geoip2"
@@ -38,6 +39,11 @@ var (
 
 type hostKey struct {
 	ip  bpf.BpfIn6Addr
+	mac uint64
+}
+
+type asKey struct {
+	ip  bpf.BpfRemoteStatsKey
 	mac uint64
 }
 
@@ -90,7 +96,7 @@ func printMap(mapName string, m *ebpf.Map) error {
 	t.SetTitle(fmt.Sprintf("Traffic stats - %v", mapName))
 
 	headingRow := table.Row{
-		"IP",
+		fmt.Sprintf("%s IP", strings.ToTitle(mapName)),
 		"MAC",
 		"Sent",
 		"Sent",
@@ -116,13 +122,17 @@ func printMap(mapName string, m *ebpf.Map) error {
 		subheadingRow = slices.Insert(subheadingRow, 2, "")
 	}
 
-	if mapName == "remote" && asnReader != nil {
-		headingRow = slices.Insert(headingRow, 1, "AS")
-		headingRow = slices.Insert(headingRow, 2, "AS")
-		headingRow = slices.Insert(headingRow, 3, "AS")
-		subheadingRow = slices.Insert(subheadingRow, 1, "Number")
-		subheadingRow = slices.Insert(subheadingRow, 2, "Organization")
-		subheadingRow = slices.Insert(subheadingRow, 3, "Prefix")
+	if mapName == "remote" {
+		headingRow = slices.Insert(headingRow, 0, "Local IP")
+		subheadingRow = slices.Insert(subheadingRow, 0, "")
+		if asnReader != nil {
+			headingRow = slices.Insert(headingRow, 2, "AS")
+			headingRow = slices.Insert(headingRow, 3, "AS")
+			headingRow = slices.Insert(headingRow, 4, "AS")
+			subheadingRow = slices.Insert(subheadingRow, 2, "Number")
+			subheadingRow = slices.Insert(subheadingRow, 3, "Organization")
+			subheadingRow = slices.Insert(subheadingRow, 4, "Prefix")
+		}
 	}
 
 	t.AppendHeader(
@@ -131,143 +141,238 @@ func printMap(mapName string, m *ebpf.Map) error {
 	)
 	t.AppendHeader(subheadingRow)
 
-	var (
-		key  bpf.BpfIn6Addr
-		vals []bpf.BpfHostCounter
-	)
-
 	iter := m.Iterate()
-	for iter.Next(&key, &vals) {
-		ip := netip.AddrFrom16(key.In6U.U6Addr8)
-		if *perCpuStats {
-			for cpu, val := range vals {
-				row := table.Row{
-					ip.Unmap(),
-				}
 
-				if mapName == "remote" && asnReader != nil {
-					record, err := asnReader.Lookup(net.IP(ip.Unmap().AsSlice()))
-					if err != nil {
-						row = append(row,
-							table.Row{
-								"",
-								"",
-								"",
-							}...,
-						)
+	switch mapName {
+	case "local":
+		var (
+			key  bpf.BpfIn6Addr
+			vals []bpf.BpfHostCounter
+		)
+
+		for iter.Next(&key, &vals) {
+			ip := netip.AddrFrom16(key.In6U.U6Addr8)
+			if *perCpuStats {
+				for cpu, val := range vals {
+					row := table.Row{
+						ip.Unmap(),
+					}
+
+					row = append(row,
+						table.Row{
+							mac.MacAddress(val.Mac),
+							cpu,
+							val.TxBytes,
+							val.TxPackets,
+							val.RxBytes,
+							val.RxPackets,
+							tc.TcHandleString(val.TcHandle),
+							val.LastSeen,
+							decodeLastSeenTime(val.LastSeen),
+						}...,
+					)
+
+					t.AppendRow(row)
+				}
+			} else {
+				// Sort by last seen so TcHandle/LastSeen values that
+				// are stored in aggData are the most up to date
+				sort.Slice(vals, func(a, b int) bool {
+					return vals[a].LastSeen < vals[b].LastSeen
+				})
+
+				hostAggData := map[hostKey]bpf.BpfHostCounter{}
+
+				for _, val := range vals {
+					host := hostKey{
+						ip:  key,
+						mac: val.Mac,
+					}
+
+					// Aggregate statistics by host
+					if stats, exists := hostAggData[host]; exists {
+						stats.TxBytes += val.TxBytes
+						stats.TxPackets += val.TxPackets
+						stats.RxBytes += val.RxBytes
+						stats.RxPackets += val.RxPackets
+						stats.LastSeen = val.LastSeen
+
+						hostAggData[host] = stats
 					} else {
-						prefix := record.Network
-						if prefix == "<nil>" {
-							prefix = ""
+						hostAggData[host] = bpf.BpfHostCounter{
+							TxBytes:   val.TxBytes,
+							TxPackets: val.TxPackets,
+							RxBytes:   val.RxBytes,
+							RxPackets: val.RxPackets,
+							TcHandle:  val.TcHandle,
+							Mac:       val.Mac,
+							LastSeen:  val.LastSeen,
 						}
-
-						row = append(row,
-							table.Row{
-								record.AutonomousSystemNumber,
-								record.AutonomousSystemOrganization,
-								prefix,
-							}...,
-						)
 					}
 				}
 
-				row = append(row,
-					table.Row{
-						mac.MacAddress(val.Mac),
-						cpu,
-						val.TxBytes,
-						val.TxPackets,
-						val.RxBytes,
-						val.RxPackets,
-						tc.TcHandleString(val.TcHandle),
-						val.LastSeen,
-						decodeLastSeenTime(val.LastSeen),
-					}...,
-				)
-
-				t.AppendRow(row)
-			}
-		} else {
-			// Sort by last seen so TcHandle/LastSeen values that
-			// are stored in aggData are the most up to date
-			sort.Slice(vals, func(a, b int) bool {
-				return vals[a].LastSeen < vals[b].LastSeen
-			})
-
-			hostAggData := map[hostKey]bpf.BpfHostCounter{}
-
-			for _, val := range vals {
-				host := hostKey{
-					ip:  key,
-					mac: val.Mac,
-				}
-
-				// Aggregate statistics by host
-				if stats, exists := hostAggData[host]; exists {
-					stats.TxBytes += val.TxBytes
-					stats.TxPackets += val.TxPackets
-					stats.RxBytes += val.RxBytes
-					stats.RxPackets += val.RxPackets
-					stats.LastSeen = val.LastSeen
-
-					hostAggData[host] = stats
-				} else {
-					hostAggData[host] = bpf.BpfHostCounter{
-						TxBytes:   val.TxBytes,
-						TxPackets: val.TxPackets,
-						RxBytes:   val.RxBytes,
-						RxPackets: val.RxPackets,
-						TcHandle:  val.TcHandle,
-						Mac:       val.Mac,
-						LastSeen:  val.LastSeen,
+				for host, stats := range hostAggData {
+					row := table.Row{
+						ip.Unmap(),
 					}
+
+					row = append(row,
+						table.Row{
+							mac.MacAddress(host.mac),
+							stats.TxBytes,
+							stats.TxPackets,
+							stats.RxBytes,
+							stats.RxPackets,
+							tc.TcHandleString(stats.TcHandle),
+							decodeLastSeenTime(stats.LastSeen),
+						}...,
+					)
+
+					t.AppendRow(row)
 				}
 			}
+		}
+	case "remote":
+		var (
+			key  bpf.BpfRemoteStatsKey
+			vals []bpf.BpfHostCounter
+		)
 
-			for host, stats := range hostAggData {
-				row := table.Row{
-					ip.Unmap(),
+		for iter.Next(&key, &vals) {
+			ip := netip.AddrFrom16(key.RemoteIp.In6U.U6Addr8)
+			localIP := netip.AddrFrom16(key.LocalIp.In6U.U6Addr8)
+			if *perCpuStats {
+				for cpu, val := range vals {
+					row := table.Row{
+						localIP.Unmap(),
+						ip.Unmap(),
+					}
+
+					if asnReader != nil {
+						record, err := asnReader.Lookup(net.IP(ip.Unmap().AsSlice()))
+						if err != nil {
+							row = append(row,
+								table.Row{
+									"",
+									"",
+									"",
+								}...,
+							)
+						} else {
+							prefix := record.Network
+							if prefix == "<nil>" {
+								prefix = ""
+							}
+
+							row = append(row,
+								table.Row{
+									record.AutonomousSystemNumber,
+									record.AutonomousSystemOrganization,
+									prefix,
+								}...,
+							)
+						}
+					}
+
+					row = append(row,
+						table.Row{
+							mac.MacAddress(val.Mac),
+							cpu,
+							val.TxBytes,
+							val.TxPackets,
+							val.RxBytes,
+							val.RxPackets,
+							tc.TcHandleString(val.TcHandle),
+							val.LastSeen,
+							decodeLastSeenTime(val.LastSeen),
+						}...,
+					)
+
+					t.AppendRow(row)
 				}
+			} else {
+				// Sort by last seen so TcHandle/LastSeen values that
+				// are stored in aggData are the most up to date
+				sort.Slice(vals, func(a, b int) bool {
+					return vals[a].LastSeen < vals[b].LastSeen
+				})
 
-				if mapName == "remote" && asnReader != nil {
-					record, err := asnReader.Lookup(net.IP(ip.Unmap().AsSlice()))
-					if err != nil {
-						row = append(row,
-							table.Row{
-								"",
-								"",
-								"",
-							}...,
-						)
+				hostAggData := map[asKey]bpf.BpfHostCounter{}
+
+				for _, val := range vals {
+					host := asKey{
+						ip:  key,
+						mac: val.Mac,
+					}
+
+					// Aggregate statistics by host
+					if stats, exists := hostAggData[host]; exists {
+						stats.TxBytes += val.TxBytes
+						stats.TxPackets += val.TxPackets
+						stats.RxBytes += val.RxBytes
+						stats.RxPackets += val.RxPackets
+						stats.LastSeen = val.LastSeen
+
+						hostAggData[host] = stats
 					} else {
-						prefix := record.Network
-						if prefix == "<nil>" {
-							prefix = ""
+						hostAggData[host] = bpf.BpfHostCounter{
+							TxBytes:   val.TxBytes,
+							TxPackets: val.TxPackets,
+							RxBytes:   val.RxBytes,
+							RxPackets: val.RxPackets,
+							TcHandle:  val.TcHandle,
+							Mac:       val.Mac,
+							LastSeen:  val.LastSeen,
 						}
-
-						row = append(row,
-							table.Row{
-								record.AutonomousSystemNumber,
-								record.AutonomousSystemOrganization,
-								prefix,
-							}...,
-						)
 					}
 				}
 
-				row = append(row,
-					table.Row{
-						mac.MacAddress(host.mac),
-						stats.TxBytes,
-						stats.TxPackets,
-						stats.RxBytes,
-						stats.RxPackets,
-						tc.TcHandleString(stats.TcHandle),
-						decodeLastSeenTime(stats.LastSeen),
-					}...,
-				)
+				for host, stats := range hostAggData {
+					row := table.Row{
+						localIP.Unmap(),
+						ip.Unmap(),
+					}
 
-				t.AppendRow(row)
+					if asnReader != nil {
+						record, err := asnReader.Lookup(net.IP(ip.Unmap().AsSlice()))
+						if err != nil {
+							row = append(row,
+								table.Row{
+									"",
+									"",
+									"",
+								}...,
+							)
+						} else {
+							prefix := record.Network
+							if prefix == "<nil>" {
+								prefix = ""
+							}
+
+							row = append(row,
+								table.Row{
+									record.AutonomousSystemNumber,
+									record.AutonomousSystemOrganization,
+									prefix,
+								}...,
+							)
+						}
+					}
+
+					row = append(row,
+						table.Row{
+							mac.MacAddress(host.mac),
+							stats.TxBytes,
+							stats.TxPackets,
+							stats.RxBytes,
+							stats.RxPackets,
+							tc.TcHandleString(stats.TcHandle),
+							decodeLastSeenTime(stats.LastSeen),
+						}...,
+					)
+
+					t.AppendRow(row)
+				}
 			}
 		}
 	}

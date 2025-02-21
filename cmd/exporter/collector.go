@@ -27,8 +27,9 @@ type hostKey struct {
 }
 
 type asKey struct {
-	asn string
-	org string
+	localIp netip.Addr
+	asn     string
+	org     string
 }
 
 type tcCpumapCollector struct {
@@ -58,7 +59,7 @@ func newTcCpumapCollector(
 	asnReader *geoip2.ASNReader,
 ) *tcCpumapCollector {
 	ipTrafficLocalLabels := []string{"ip", "mac", "tc_handle", "tc_handle_name"}
-	ipTrafficRemoteLabels := []string{"as_num", "as_org"}
+	ipTrafficRemoteLabels := []string{"local_ip", "as_num", "as_org"}
 	tcHandleTrafficLabels := []string{"tc_handle", "tc_handle_name"}
 
 	up := prometheus.NewDesc(
@@ -205,24 +206,25 @@ func (collector *tcCpumapCollector) collectBpfMapMetrics(ch chan<- prometheus.Me
 			continue
 		}
 
-		var (
-			key  bpf.BpfIn6Addr
-			vals []bpf.BpfHostCounter
-		)
-
 		asAggData := map[asKey]bpf.BpfHostCounter{}
 		tcHandleAggData := map[uint32]bpf.BpfHostCounter{}
 
 		iter := m.Iterate()
-		for iter.Next(&key, &vals) {
-			// Sort by last seen so TcHandle/LastSeen values that
-			// are stored in aggData are the most recent
-			sort.Slice(vals, func(a, b int) bool {
-				return vals[a].LastSeen < vals[b].LastSeen
-			})
 
-			switch bpfMap {
-			case "map_traffic_local":
+		switch bpfMap {
+		case "map_traffic_local":
+			var (
+				key  bpf.BpfIn6Addr
+				vals []bpf.BpfHostCounter
+			)
+
+			for iter.Next(&key, &vals) {
+				// Sort by last seen so TcHandle/LastSeen values that
+				// are stored in aggData are the most recent
+				sort.Slice(vals, func(a, b int) bool {
+					return vals[a].LastSeen < vals[b].LastSeen
+				})
+
 				hostAggData := map[hostKey]bpf.BpfHostCounter{}
 
 				for _, val := range vals {
@@ -304,25 +306,36 @@ func (collector *tcCpumapCollector) collectBpfMapMetrics(ch chan<- prometheus.Me
 						labels...,
 					)
 				}
-			case "map_traffic_remote":
-				if collector.asnReader == nil {
-					continue
-				}
+			}
+		case "map_traffic_remote":
+			if collector.asnReader == nil {
+				continue
+			}
 
+			var (
+				key  bpf.BpfRemoteStatsKey
+				vals []bpf.BpfHostCounter
+			)
+
+			for iter.Next(&key, &vals) {
 				for _, val := range vals {
 					var as asKey
 
-					ip := netip.AddrFrom16(key.In6U.U6Addr8)
+					ip := netip.AddrFrom16(key.RemoteIp.In6U.U6Addr8)
+					localIp := netip.AddrFrom16(key.LocalIp.In6U.U6Addr8)
+
 					record, err := collector.asnReader.Lookup(net.IP(ip.Unmap().AsSlice()))
 					if err != nil {
 						as = asKey{
-							asn: "unknown",
-							org: "unknown",
+							localIp: localIp,
+							asn:     "unknown",
+							org:     "unknown",
 						}
 					} else {
 						as = asKey{
-							asn: strconv.Itoa(int(record.AutonomousSystemNumber)),
-							org: record.AutonomousSystemOrganization,
+							localIp: localIp,
+							asn:     strconv.Itoa(int(record.AutonomousSystemNumber)),
+							org:     record.AutonomousSystemOrganization,
 						}
 					}
 
@@ -399,7 +412,7 @@ func (collector *tcCpumapCollector) collectBpfMapMetrics(ch chan<- prometheus.Me
 			}
 		case "map_traffic_remote":
 			for as, stats := range asAggData {
-				labels := []string{as.asn, as.org}
+				labels := []string{as.localIp.Unmap().String(), as.asn, as.org}
 
 				ch <- prometheus.MustNewConstMetric(
 					collector.asTrafficRemoteRxBytes,

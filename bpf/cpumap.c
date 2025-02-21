@@ -103,7 +103,7 @@ int xdp_prog(struct xdp_md *ctx) {
                 bpf_ntohs(dissector.dst_port));
       if (dissector.nat) {
         log_debug("NAT flow, original IP %pI4",
-                  &dissector.nat_src_ip.in6_u.u6_addr32[3]);
+                  &dissector.nat_orig_ip.in6_u.u6_addr32[3]);
       }
     } else {
       log_debug("L3 flow ip protocol %u src %pI6:%u dst %pI6:%u",
@@ -156,16 +156,27 @@ int xdp_prog(struct xdp_md *ctx) {
   }
 
   // Update the local traffic tracking buffers
-  track_traffic(TRAFFIC_MAP_LOCAL, direction, &lookup_key.address,
+  track_traffic(TRAFFIC_MAP_LOCAL, direction, &lookup_key.address, NULL,
                 ctx->data_end - ctx->data, // end - data = length
                 tc_handle, local_mac);
 
-  struct in6_addr remote_address =
+  struct in6_addr remote_ip =
       (direction == DIRECTION_INTERNET) ? dissector.src_ip : dissector.dst_ip;
 
+  struct in6_addr local_ip;
+  if (direction == DIRECTION_INTERNET) {
+    local_ip = dissector.dst_ip;
+  } else {
+    if (dissector.nat) {
+      local_ip = dissector.nat_ip;
+    } else {
+      local_ip = dissector.src_ip;
+    }
+  }
+
   // Update the remote traffic tracking buffers
-  track_traffic(TRAFFIC_MAP_REMOTE, reverse_direction(direction),
-                &remote_address,
+  track_traffic(TRAFFIC_MAP_REMOTE, reverse_direction(direction), &remote_ip,
+                &local_ip,
                 ctx->data_end - ctx->data, // end - data = length
                 0, remote_mac);
 
@@ -274,7 +285,7 @@ int tc_prog(struct __sk_buff *skb) {
                 bpf_ntohs(dissector.dst_port));
       if (dissector.nat) {
         log_debug("NAT flow, original IP %pI4",
-                  &dissector.nat_src_ip.in6_u.u6_addr32[3]);
+                  &dissector.nat_orig_ip.in6_u.u6_addr32[3]);
       }
     } else {
       log_debug("L3 flow ip protocol %u src %pI6:%u dst %pI6:%u",

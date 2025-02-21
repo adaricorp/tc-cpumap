@@ -16,7 +16,7 @@ static __always_inline struct ip_hash_info *lookup_ip(
   lookup_key->prefixlen = 128;
 
   if (dissector->nat) {
-    lookup_key->address = dissector->nat_src_ip;
+    lookup_key->address = dissector->nat_orig_ip;
   } else {
     lookup_key->address = (direction == DIRECTION_INTERNET) ? dissector->dst_ip
                                                             : dissector->src_ip;

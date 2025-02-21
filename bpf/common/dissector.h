@@ -57,7 +57,8 @@ struct dissector_t {
   __u32 tsecr;
   // NAT
   bool nat;
-  struct in6_addr nat_src_ip;
+  struct in6_addr nat_ip;
+  struct in6_addr nat_orig_ip;
 };
 
 // Representation of the PPPoE protocol header.
@@ -240,7 +241,8 @@ static __always_inline void resolve_nat(struct dissector_t *dissector) {
     if (ct) {
       if (ct->status & IPS_SRC_NAT) {
         dissector->nat = true;
-        encode_ipv4(ct->tuplehash[0].tuple.src.u3.ip, &dissector->nat_src_ip);
+        encode_ipv4(ct->tuplehash[0].tuple.src.u3.ip, &dissector->nat_orig_ip);
+        encode_ipv4(ct->tuplehash[1].tuple.dst.u3.ip, &dissector->nat_ip);
       }
       bpf_ct_release(ct);
     }
@@ -252,7 +254,8 @@ static __always_inline void resolve_nat(struct dissector_t *dissector) {
     if (ct) {
       if (ct->status & IPS_SRC_NAT) {
         dissector->nat = true;
-        encode_ipv4(ct->tuplehash[0].tuple.src.u3.ip, &dissector->nat_src_ip);
+        encode_ipv4(ct->tuplehash[0].tuple.src.u3.ip, &dissector->nat_orig_ip);
+        encode_ipv4(ct->tuplehash[1].tuple.dst.u3.ip, &dissector->nat_ip);
       }
       bpf_ct_release(ct);
     }
