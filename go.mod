@@ -1,6 +1,6 @@
 module github.com/adaricorp/tc-cpumap
 
-go 1.23
+go 1.24
 require (
 	github.com/IncSW/geoip2 v0.1.3
 	github.com/cilium/ebpf v0.17.3
