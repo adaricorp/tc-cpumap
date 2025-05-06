@@ -99,8 +99,8 @@ func init() {
 	}
 
 	logConfig := &promslog.Config{
-		Level:  &promslog.AllowedLevel{},
-		Format: &promslog.AllowedFormat{},
+		Level:  promslog.NewLevel(),
+		Format: promslog.NewFormat(),
 	}
 	if err := logConfig.Level.Set(*logLevel); err != nil {
 		fmt.Fprintf(os.Stderr, "Error setting log level: %v\n", err)
