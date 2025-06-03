@@ -1,6 +1,6 @@
 module github.com/adaricorp/tc-cpumap
 
-go 1.24
+go 1.24.2
 
 toolchain go1.24.3
 
@@ -17,7 +17,7 @@ require (
 	github.com/prometheus/client_golang v1.22.0
 	github.com/prometheus/common v0.64.0
 	github.com/prometheus/exporter-toolkit v0.14.0
-	github.com/safchain/ethtool v0.6.0
+	github.com/safchain/ethtool v0.6.1
 	golang.org/x/exp v0.0.0-20240318143956-a85f2c67cd81
 	golang.org/x/sys v0.33.0
 	gopkg.in/yaml.v3 v3.0.1
