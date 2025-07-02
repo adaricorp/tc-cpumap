@@ -305,18 +305,21 @@ func loadBpf() (bpf.BpfObjects, error) {
 		if err != nil {
 			slog.Error("Couldn't load nf_conntrack BTF", "error", err.Error())
 		} else {
-			iter := conntrackSpec.Iterate()
-			for iter.Next() {
-				if _, ok := iter.Type.(*btf.Enum); !ok {
-					continue
-				}
-				for _, i := range iter.Type.(*btf.Enum).Values {
-					if i.Name == "NF_BPF_CT_OPTS_SZ" {
-						if err := bpfSpec.Variables["BPF_CT_OPTS_SIZE"].Set(uint32(i.Value)); err != nil {
-							slog.Error(
-								"Couldn't rewrite BPF_CT_OPTS_SIZE constant",
-								"error", err.Error(),
-							)
+			for typ, err := range conntrackSpec.All() {
+				if err != nil {
+					slog.Error("Couldn't iterate over nf_conntrack BTF types", "error", err.Error())
+				} else {
+					if _, ok := typ.(*btf.Enum); !ok {
+						continue
+					}
+					for _, i := range typ.(*btf.Enum).Values {
+						if i.Name == "NF_BPF_CT_OPTS_SZ" {
+							if err := bpfSpec.Variables["BPF_CT_OPTS_SIZE"].Set(uint32(i.Value)); err != nil {
+								slog.Error(
+									"Couldn't rewrite BPF_CT_OPTS_SIZE constant",
+									"error", err.Error(),
+								)
+							}
 						}
 					}
 				}
