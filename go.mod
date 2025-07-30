@@ -10,7 +10,7 @@ require (
 	github.com/IncSW/geoip2 v0.1.3
 	github.com/cilium/ebpf v0.19.0
 	github.com/danjacques/gofslock v0.0.0-20240212154529-d899e02bfe22
-	github.com/jedib0t/go-pretty/v6 v6.6.7
+	github.com/jedib0t/go-pretty/v6 v6.6.8
 	github.com/mitchellh/go-ps v1.0.0
 	github.com/peterbourgon/ff/v4 v4.0.0-alpha.4
 	github.com/pkg/errors v0.9.1
