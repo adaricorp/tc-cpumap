@@ -49,8 +49,8 @@ github.com/mwitkow/go-conntrack v0.0.0-20190716064945-2f068394615f h1:KUppIJq7/+
 github.com/mwitkow/go-conntrack v0.0.0-20190716064945-2f068394615f/go.mod h1:qRWi+5nqEBWmkhHvq77mSJWrCKwh8bxhgT7d/eI7P4U=
 github.com/pelletier/go-toml/v2 v2.0.9 h1:uH2qQXheeefCCkuBBSLi7jCiSmj3VRh2+Goq2N7Xxu0=
 github.com/pelletier/go-toml/v2 v2.0.9/go.mod h1:tJU2Z3ZkXwnxa4DPO899bsyIoywizdUvyaeZurnPPDc=
-github.com/peterbourgon/ff/v4 v4.0.0-alpha.4 h1:aiqS8aBlF9PsAKeMddMSfbwp3smONCn3UO8QfUg0Z7Y=
-github.com/peterbourgon/ff/v4 v4.0.0-alpha.4/go.mod h1:H/13DK46DKXy7EaIxPhk2Y0EC8aubKm35nBjBe8AAGc=
+github.com/peterbourgon/ff/v4 v4.0.0-beta.1 h1:hV8qRu3V7YfiSMsBSfPfdcznAvPQd3jI5zDddSrDoUc=
+github.com/peterbourgon/ff/v4 v4.0.0-beta.1/go.mod h1:onQJUKipvCyFmZ1rIYwFAh1BhPOvftb1uhvSI7krNLc=
 github.com/pkg/errors v0.9.1 h1:FEBLx1zS214owpjy7qsBeixbURkuhQAwrK5UwLGTwt4=
 github.com/pkg/errors v0.9.1/go.mod h1:bwawxfHBFNV+L2hUp1rHADufV3IMtnDRdf1r5NINEl0=
 github.com/pmezard/go-difflib v1.0.0 h1:4DBwDE0NGyQoBHbLQYPwSUPoCMWR5BEzIk/f1lZbAQM=
