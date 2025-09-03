@@ -2,7 +2,7 @@ module github.com/adaricorp/tc-cpumap
 
 go 1.24.2
 
-toolchain go1.24.6
+toolchain go1.24.7
 
 tool github.com/cilium/ebpf/cmd/bpf2go
 
