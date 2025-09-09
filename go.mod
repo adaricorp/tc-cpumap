@@ -15,7 +15,7 @@ require (
 	github.com/peterbourgon/ff/v4 v4.0.0-beta.1
 	github.com/pkg/errors v0.9.1
 	github.com/prometheus/client_golang v1.23.0
-	github.com/prometheus/common v0.66.0
+	github.com/prometheus/common v0.66.1
 	github.com/prometheus/exporter-toolkit v0.14.0
 	github.com/safchain/ethtool v0.6.2
 	go.yaml.in/yaml/v3 v3.0.4
@@ -27,7 +27,6 @@ require (
 	github.com/beorn7/perks v1.0.1 // indirect
 	github.com/cespare/xxhash/v2 v2.3.0 // indirect
 	github.com/coreos/go-systemd/v22 v22.6.0 // indirect
-	github.com/grafana/regexp v0.0.0-20240518133315-a468a5bfb3bc // indirect
 	github.com/jpillora/backoff v1.0.0 // indirect
 	github.com/mattn/go-runewidth v0.0.16 // indirect
 	github.com/mdlayher/socket v0.5.1 // indirect
@@ -37,6 +36,7 @@ require (
 	github.com/prometheus/client_model v0.6.2 // indirect
 	github.com/prometheus/procfs v0.17.0 // indirect
 	github.com/rivo/uniseg v0.4.7 // indirect
+	go.yaml.in/yaml/v2 v2.4.2 // indirect
 	golang.org/x/crypto v0.41.0 // indirect
 	golang.org/x/net v0.43.0 // indirect
 	golang.org/x/oauth2 v0.31.0 // indirect
