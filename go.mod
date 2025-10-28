@@ -14,7 +14,7 @@ require (
 	github.com/pkg/errors v0.9.1
 	github.com/prometheus/client_golang v1.23.2
 	github.com/prometheus/common v0.67.1
-	github.com/prometheus/exporter-toolkit v0.14.1
+	github.com/prometheus/exporter-toolkit v0.15.0
 	github.com/safchain/ethtool v0.6.2
 	go.yaml.in/yaml/v3 v3.0.4
 	golang.org/x/exp v0.0.0-20240318143956-a85f2c67cd81
@@ -40,5 +40,6 @@ require (
 	golang.org/x/oauth2 v0.32.0 // indirect
 	golang.org/x/sync v0.17.0 // indirect
 	golang.org/x/text v0.30.0 // indirect
+	golang.org/x/time v0.13.0 // indirect
 	google.golang.org/protobuf v1.36.10 // indirect
 )
