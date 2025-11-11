@@ -60,7 +60,7 @@ jobs:
         run: ./boot.sh
 
       - name: Lint
-        uses: golangci/golangci-lint-action@v8
+        uses: golangci/golangci-lint-action@v9
         with:
           only-new-issues: true
 
