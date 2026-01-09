@@ -2,5 +2,5 @@
 
 set -euo pipefail
 
-curl -sfL https://goreleaser.com/static/run | \
-  bash -s -- release --clean --skip=publish --snapshot
+curl -sfL https://goreleaser.com/static/run |
+    bash -s -- release --clean --skip=publish --snapshot --parallelism "$(($(nproc) - 2))"

@@ -26,12 +26,15 @@ jobs:
         run: |
           sudo apt -y install clang linux-tools-common linux-tools-$(uname -r) llvm
 
+      - name: Configure parallelism
+        run: echo "PARALLELISM=$(($(nproc) - 2))" >> "${GITHUB_ENV}"
+
       - name: Run GoReleaser
         uses: goreleaser/goreleaser-action@v6
         with:
           distribution: goreleaser
           version: latest
-          args: release --clean --skip=publish --snapshot
+          args: release --clean --skip=publish --snapshot --parallelism ${{ env.PARALLELISM }}
 
       - name: Upload build artifacts
         uses: actions/upload-artifact@v6
