@@ -1,6 +1,6 @@
 module github.com/adaricorp/tc-cpumap
 
-go 1.24.11
+go 1.25.6
 
 tool github.com/cilium/ebpf/cmd/bpf2go
 
