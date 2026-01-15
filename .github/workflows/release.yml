@@ -27,6 +27,19 @@ jobs:
         run: |
           sudo apt -y install clang linux-tools-common linux-tools-$(uname -r) llvm
 
+      - name: Clean up disk space
+        run: |
+          sudo rm -rf \
+            /opt/google/chrome \
+            /opt/microsoft/msedge \
+            /opt/microsoft/powershell \
+            /usr/lib/mono \
+            /usr/local/julia* \
+            /usr/local/share/chromium \
+            /usr/local/share/powershell \
+            /usr/share/dotnet \
+            /usr/share/swift
+
       - name: Configure parallelism
         run: echo "PARALLELISM=$(($(nproc) - 2))" >> "${GITHUB_ENV}"
 
