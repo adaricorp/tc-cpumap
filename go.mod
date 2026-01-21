@@ -5,7 +5,7 @@ go 1.25.6
 tool github.com/cilium/ebpf/cmd/bpf2go
 
 require (
-	github.com/IncSW/geoip2 v0.1.3
+	github.com/IncSW/geoip2 v0.1.4
 	github.com/cilium/ebpf v0.20.0
 	github.com/danjacques/gofslock v0.0.0-20240212154529-d899e02bfe22
 	github.com/jedib0t/go-pretty/v6 v6.7.8
