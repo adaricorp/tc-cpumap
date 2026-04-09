@@ -1,6 +1,7 @@
 package main
 
 import (
+	"errors"
 	"fmt"
 	"log/slog"
 	"net"
@@ -22,7 +23,6 @@ import (
 	"github.com/danjacques/gofslock/fslock"
 	"github.com/peterbourgon/ff/v4"
 	"github.com/peterbourgon/ff/v4/ffhelp"
-	"github.com/pkg/errors"
 	"github.com/safchain/ethtool"
 )
 
@@ -262,7 +262,7 @@ func unpinIncompatibleMaps(maps map[string]*ebpf.MapSpec, opts ebpf.MapOptions) 
 				path.Join(bpf.MapPinPath, bpfMap.Name),
 				&opts.LoadPinOptions)
 			if err != nil {
-				return errors.Wrap(err, "Loading pinned BPF map failed")
+				return fmt.Errorf("Loading pinned BPF map failed: %w", err)
 			}
 
 			defer func() {
@@ -278,10 +278,10 @@ func unpinIncompatibleMaps(maps map[string]*ebpf.MapSpec, opts ebpf.MapOptions) 
 			}()
 
 			if err = oldMap.Unpin(); err != nil {
-				return errors.Wrapf(
-					err,
-					"Failed to unpin BPF map: %s",
+				return fmt.Errorf(
+					"Failed to unpin BPF map %s: %w",
 					bpfMap.Name,
+					err,
 				)
 			}
 		}
@@ -293,7 +293,7 @@ func unpinIncompatibleMaps(maps map[string]*ebpf.MapSpec, opts ebpf.MapOptions) 
 func loadBpf() (bpf.BpfObjects, error) {
 	bpfSpec, err := bpf.LoadBpf()
 	if err != nil {
-		return bpf.BpfObjects{}, errors.Wrap(err, "Parsing BPF ELF file failed")
+		return bpf.BpfObjects{}, fmt.Errorf("Parsing BPF ELF file failed: %w", err)
 	}
 
 	if err := bpfSpec.Variables["CT_ZONE_ID"].Set(uint16(*ctZoneId)); err != nil {
@@ -354,7 +354,7 @@ func loadBpf() (bpf.BpfObjects, error) {
 	objs := bpf.BpfObjects{}
 
 	if err := unpinIncompatibleMaps(bpfSpec.Maps, bpfMapOpts); err != nil {
-		return bpf.BpfObjects{}, errors.Wrap(err, "Unpinning incompatible BPF maps failed")
+		return bpf.BpfObjects{}, fmt.Errorf("Unpinning incompatible BPF maps failed: %w", err)
 	}
 
 	if err := bpfSpec.LoadAndAssign(&objs, &ebpf.CollectionOptions{
@@ -366,7 +366,7 @@ func loadBpf() (bpf.BpfObjects, error) {
 			fmt.Fprintf(os.Stderr, "BPF verifier error: %+v\n", ve)
 		}
 
-		return bpf.BpfObjects{}, errors.Wrap(err, "Loading BPF objects failed")
+		return bpf.BpfObjects{}, fmt.Errorf("Loading BPF objects failed: %w", err)
 	}
 
 	return objs, nil
@@ -378,23 +378,23 @@ func attachBpf(objs bpf.BpfObjects) ([]link.Link, error) {
 	for _, ifaceName := range append(*internetIfaceNames, *clientIfaceNames...) {
 		iface, err := net.InterfaceByName(ifaceName)
 		if err != nil {
-			return links, errors.Wrapf(
-				err, "Couldn't find network interface %v", ifaceName,
+			return links, fmt.Errorf(
+				"Couldn't find network interface %v: %w", ifaceName, err,
 			)
 		}
 
 		link, err := attachXdp(objs, iface)
 		if err != nil {
-			return links, errors.Wrapf(
-				err, "Couldn't attach XDP eBPF program to interface %v", ifaceName,
+			return links, fmt.Errorf(
+				"Couldn't attach XDP eBPF program to interface %v: %w", ifaceName, err,
 			)
 		}
 		links = append(links, link)
 
 		link, err = attachTc(objs, iface)
 		if err != nil {
-			return links, errors.Wrapf(
-				err, "Couldn't attach TC eBPF program to interface %v", ifaceName,
+			return links, fmt.Errorf(
+				"Couldn't attach TC eBPF program to interface %v: %w", ifaceName, err,
 			)
 		}
 		links = append(links, link)
@@ -403,8 +403,8 @@ func attachBpf(objs bpf.BpfObjects) ([]link.Link, error) {
 	for _, ifaceName := range *internetIfaceNames {
 		iface, err := net.InterfaceByName(ifaceName)
 		if err != nil {
-			return links, errors.Wrapf(
-				err, "Couldn't find network interface %v", ifaceName,
+			return links, fmt.Errorf(
+				"Couldn't find network interface %v: %w", ifaceName, err,
 			)
 		}
 
@@ -413,15 +413,15 @@ func attachBpf(objs bpf.BpfObjects) ([]link.Link, error) {
 			uint32(bpf.DirectionInternet),
 			ebpf.UpdateAny,
 		); err != nil {
-			return links, errors.Wrap(err, "Failed to write to map")
+			return links, fmt.Errorf("Failed to write to map: %w", err)
 		}
 	}
 
 	for _, ifaceName := range *clientIfaceNames {
 		iface, err := net.InterfaceByName(ifaceName)
 		if err != nil {
-			return links, errors.Wrapf(
-				err, "Couldn't find network interface %v", ifaceName,
+			return links, fmt.Errorf(
+				"Couldn't find network interface %v: %w", ifaceName, err,
 			)
 		}
 
@@ -430,7 +430,7 @@ func attachBpf(objs bpf.BpfObjects) ([]link.Link, error) {
 			int32(bpf.DirectionClient),
 			ebpf.UpdateAny,
 		); err != nil {
-			return links, errors.Wrap(err, "Failed to write to map")
+			return links, fmt.Errorf("Failed to write to map: %w", err)
 		}
 	}
 
@@ -446,8 +446,8 @@ func getIfaceQueues(ifaceName string, direction string) (map[string]string, erro
 
 	queueDirs, err := filepath.Glob(queuesGlob)
 	if err != nil {
-		return map[string]string{}, errors.Wrapf(
-			err, "Couldn't read sysfs for interface %v", ifaceName,
+		return map[string]string{}, fmt.Errorf(
+			"Couldn't read sysfs for interface %v: %w", ifaceName, err,
 		)
 	}
 
@@ -479,7 +479,7 @@ func configureNic(
 
 	ethtool, err := ethtool.NewEthtool()
 	if err != nil {
-		return oldIfaceEthtoolConfig, errors.Wrap(err, "Couldn't create new ethtool")
+		return oldIfaceEthtoolConfig, fmt.Errorf("Couldn't create new ethtool: %w", err)
 	}
 	defer ethtool.Close()
 
@@ -488,10 +488,10 @@ func configureNic(
 
 		features, err := ethtool.Features(ifaceName)
 		if err != nil {
-			return oldIfaceEthtoolConfig, errors.Wrapf(
-				err,
-				"Couldn't get features for %v",
+			return oldIfaceEthtoolConfig, fmt.Errorf(
+				"Couldn't get features for %v: %w",
 				ifaceName,
+				err,
 			)
 		}
 
@@ -509,10 +509,10 @@ func configureNic(
 		}
 
 		if err = ethtool.Change(ifaceName, newFeatureConfig); err != nil {
-			return oldIfaceEthtoolConfig, errors.Wrapf(
-				err,
-				"Couldn't set features for %v",
+			return oldIfaceEthtoolConfig, fmt.Errorf(
+				"Couldn't set features for %v: %w",
 				ifaceName,
+				err,
 			)
 		}
 
@@ -520,10 +520,10 @@ func configureNic(
 
 		curCoalesce, err := ethtool.GetCoalesce(ifaceName)
 		if err != nil {
-			return oldIfaceEthtoolConfig, errors.Wrapf(
-				err,
-				"Couldn't get coalesce configuration for %v",
+			return oldIfaceEthtoolConfig, fmt.Errorf(
+				"Couldn't get coalesce configuration for %v: %w",
 				ifaceName,
+				err,
 			)
 		}
 
@@ -589,10 +589,10 @@ func disableXps() (map[string]TxQueueXpsConfig, error) {
 	for _, ifaceName := range ifaces {
 		txQueues, err := getIfaceQueues(ifaceName, "tx")
 		if err != nil {
-			return oldXpsMasks, errors.Wrapf(
-				err,
-				"Couldn't get TX queues for %v",
+			return oldXpsMasks, fmt.Errorf(
+				"Couldn't get TX queues for %v: %w",
 				ifaceName,
+				err,
 			)
 		}
 
@@ -613,11 +613,11 @@ func disableXps() (map[string]TxQueueXpsConfig, error) {
 			newMask := XpsMask{0}
 
 			if err := os.WriteFile(xpsCpusFile, newMask, 0644); err != nil {
-				return oldXpsMasks, errors.Wrapf(
-					err,
-					"Couldn't disable XPS on %v %v",
+				return oldXpsMasks, fmt.Errorf(
+					"Couldn't disable XPS on %v %v: %w",
 					ifaceName,
 					queue,
+					err,
 				)
 			}
 		}
@@ -657,10 +657,10 @@ func irqAffinity() (map[string]string, error) {
 	for _, ifaceName := range ifaces {
 		symlink, err := filepath.EvalSymlinks(fmt.Sprintf("/sys/class/net/%s", ifaceName))
 		if err != nil {
-			return oldIrqAffinities, errors.Wrapf(
-				err,
-				"Couldn't find %v in /sys",
+			return oldIrqAffinities, fmt.Errorf(
+				"Couldn't find %v in /sys: %w",
 				ifaceName,
+				err,
 			)
 		}
 		irqsDir := fmt.Sprintf(
@@ -670,10 +670,10 @@ func irqAffinity() (map[string]string, error) {
 		irqsGlob := path.Join(irqsDir, "*")
 		irqFiles, err := filepath.Glob(irqsGlob)
 		if err != nil {
-			return oldIrqAffinities, errors.Wrapf(
-				err,
-				"Couldn't find msi_irqs for %v",
+			return oldIrqAffinities, fmt.Errorf(
+				"Couldn't find msi_irqs for %v: %w",
 				ifaceName,
+				err,
 			)
 		}
 
@@ -685,10 +685,10 @@ func irqAffinity() (map[string]string, error) {
 			)
 			irqActions := string(buf)
 			if err != nil {
-				return oldIrqAffinities, errors.Wrapf(
-					err,
-					"Couldn't read actions for IRQ %v",
+				return oldIrqAffinities, fmt.Errorf(
+					"Couldn't read actions for IRQ %v: %w",
 					irq,
+					err,
 				)
 			}
 
@@ -706,10 +706,10 @@ func irqAffinity() (map[string]string, error) {
 		affinityListFile := path.Join("/proc/irq", irq, "smp_affinity_list")
 		buf, err := os.ReadFile(affinityListFile)
 		if err != nil {
-			return oldIrqAffinities, errors.Wrapf(
-				err,
-				"Couldn't read smp_affinity_list for IRQ %v",
+			return oldIrqAffinities, fmt.Errorf(
+				"Couldn't read smp_affinity_list for IRQ %v: %w",
 				irq,
+				err,
 			)
 		}
 
@@ -724,10 +724,10 @@ func irqAffinity() (map[string]string, error) {
 		}
 
 		if err := os.WriteFile(affinityListFile, []byte(cpuList), 0644); err != nil {
-			return oldIrqAffinities, errors.Wrapf(
-				err,
-				"Couldn't write smp_affinity_list for IRQ %v",
+			return oldIrqAffinities, fmt.Errorf(
+				"Couldn't write smp_affinity_list for IRQ %v: %w",
 				irq,
+				err,
 			)
 		}
 	}
