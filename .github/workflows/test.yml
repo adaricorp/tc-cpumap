@@ -24,7 +24,15 @@ jobs:
 
       - name: Install build dependencies
         run: |
-          sudo apt -y install clang linux-tools-common linux-tools-$(uname -r) llvm
+          sudo apt -y install clang llvm \
+            linux-tools-common linux-tools-$(uname -r) linux-headers-$(name -r)
+
+      - name: DEBUG
+        run: |
+          which bpftool
+          ls -al /usr/src/linux-headers-6.17.0-*-azure/tools/bpf/
+          sudo apt -y install clang llvm \
+            linux-tools-common linux-tools-$(uname -r) linux-headers-$(name -r)
 
       - name: Clean up disk space
         run: |
