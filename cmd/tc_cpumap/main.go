@@ -15,6 +15,7 @@ import (
 	"syscall"
 
 	"github.com/adaricorp/tc-cpumap/bpf"
+	"github.com/adaricorp/tc-cpumap/xps"
 
 	"github.com/cilium/ebpf"
 	"github.com/cilium/ebpf/btf"
@@ -626,6 +627,30 @@ func disableXps() (map[string]TxQueueXpsConfig, error) {
 	return oldXpsMasks, nil
 }
 
+// Some NICs (e.g. i40e) set XPS again when XDP is attached, so disable it
+// again. The masks saved by disableXps() are kept for cleanup to restore.
+func disableXpsAgain() {
+	ifaces := append(*internetIfaceNames, *clientIfaceNames...)
+
+	set, err := xps.Clear(xps.SysClassNet, ifaces)
+	for _, q := range set {
+		slog.Warn(
+			"XPS was re-enabled while attaching XDP, disabled it again",
+			"interface",
+			q.Interface,
+			"queue",
+			q.Queue,
+			"mask",
+			q.Mask,
+		)
+	}
+
+	if err != nil {
+		// Not fatal: XDP is already attached
+		slog.Error("Couldn't disable XPS again", "error", err.Error())
+	}
+}
+
 func restoreXps(oldXpsMasks map[string]TxQueueXpsConfig) {
 	for ifaceName, queues := range oldXpsMasks {
 		for queue, mask := range queues {
@@ -860,6 +885,10 @@ func main() {
 		)
 		os.Exit(1)
 	}
+
+	slog.Info("Disabling XPS again after attaching eBPF programs")
+
+	disableXpsAgain()
 
 	slog.Info("Press Ctrl-C to exit and remove the program")
 
