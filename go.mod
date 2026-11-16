@@ -12,7 +12,7 @@ require (
 	github.com/mitchellh/go-ps v1.0.0
 	github.com/peterbourgon/ff/v4 v4.0.0-beta.1
 	github.com/prometheus/client_golang v1.25.0
-	github.com/prometheus/common v0.73.1
+	github.com/prometheus/common v0.74.0
 	github.com/prometheus/exporter-toolkit v0.20.0
 	github.com/safchain/ethtool v0.7.0
 	go.yaml.in/yaml/v3 v3.0.6
