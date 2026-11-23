@@ -800,21 +800,6 @@ func main() {
 		os.Exit(1)
 	}
 
-	slog.Info("Disabling XPS")
-
-	oldXpsMasks, err = disableXps()
-	if err != nil {
-		slog.Error("Couldn't disable XPS", "error", err.Error())
-		cleanup(
-			oldIfaceEthtoolConfig,
-			oldXpsMasks,
-			oldIrqAffinities,
-			bpfObjs,
-			links,
-		)
-		os.Exit(1)
-	}
-
 	if len(*rxCpus) > 0 {
 		slog.Info("Configuring RX CPU cores")
 
@@ -851,6 +836,21 @@ func main() {
 
 	if links, err = attachBpf(bpfObjs); err != nil {
 		slog.Error("Couldn't attach BPF objects", "error", err.Error())
+		cleanup(
+			oldIfaceEthtoolConfig,
+			oldXpsMasks,
+			oldIrqAffinities,
+			bpfObjs,
+			links,
+		)
+		os.Exit(1)
+	}
+
+	slog.Info("Disabling XPS")
+
+	oldXpsMasks, err = disableXps()
+	if err != nil {
+		slog.Error("Couldn't disable XPS", "error", err.Error())
 		cleanup(
 			oldIfaceEthtoolConfig,
 			oldXpsMasks,
